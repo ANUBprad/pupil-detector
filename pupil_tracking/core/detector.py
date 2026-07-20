@@ -555,7 +555,12 @@ class UnifiedDetector:
                 gray,
                 ring_result=ring_result,
             )
-            self._apply_fit_to_result(result, pupil_fit, limbus_fit)
+            self._apply_fit_to_result(
+                result, 
+                pupil_fit, 
+                limbus_fit,
+                force_limbus_overwrite=(not is_docked)
+            )
 
         # -- Step 4: Classical fallback --------------------------------
         dc = self.cfg.detection
@@ -581,6 +586,17 @@ class UnifiedDetector:
                 if classical_limbus.detected:
                     classical_limbus.confidence *= dc.classical_confidence_penalty
                     result.limbus = classical_limbus
+
+        # -- Step 4b: Pre-docked limbus shrink correction ------------
+        if (
+            not is_docked
+            and result.limbus.detected
+            and result.limbus.ellipse is not None
+        ):
+            shrink_factor = 0.93
+            result.limbus.ellipse.set_radius(
+                result.limbus.ellipse.radius * shrink_factor
+            )
 
         # -- Step 5: Cross-validation and rejection --------------------
         if result.has_both:
@@ -612,6 +628,50 @@ class UnifiedDetector:
         # -- Step 7: Attach mm values ----------------------------------
         if self._calibration.calibrated:
             self._add_mm_values(result)
+
+        # ============================================================
+        # Heuristic: if limbus appears under-estimated while docked,
+        # and we have a ring inner radius estimate, replace limbus
+        # geometry with ring-based estimate (conservative correction).
+        # This avoids the common failure where the ring or markers are
+        # mistakenly fitted as the limbus producing very small limbus
+        # diameters in mm (< 12 mm). We reduce confidence to reflect
+        # the heuristic replacement.
+        # ============================================================
+        try:
+            if (
+                getattr(result, "ring_status", "pre_docked") == "PRESENT"
+                and getattr(result, "ring_inner_radius", None) is not None
+                and result.limbus.detected
+                and result.limbus.radius_mm is not None
+            ):
+                limbus_dia_mm = result.limbus.radius_mm * 2.0
+                if limbus_dia_mm < 12.0:
+                    ring_inner_px = float(result.ring_inner_radius)
+                    if ring_inner_px > 4.0:
+                        # Replace limbus ellipse with circle at ring centre
+                        if getattr(result, "ring_center", None) is not None:
+                            cx, cy = result.ring_center
+                        else:
+                            cx, cy = (result.limbus.ellipse.center_x, result.limbus.ellipse.center_y)
+
+                        ep = result.limbus.ellipse
+                        # Set semi-axes to ring_inner_px * 0.98 (slightly inside)
+                        new_r = ring_inner_px * 0.98
+                        ep.center_x = cx
+                        ep.center_y = cy
+                        ep.semi_major = new_r
+                        ep.semi_minor = new_r
+                        # Reduce confidence to indicate heuristic
+                        result.limbus.confidence = min(result.limbus.confidence * 0.6, 0.85)
+                        result.limbus.quality = assign_quality_grade(result.limbus.confidence)
+                        # Update mm values
+                        if self._calibration.calibrated:
+                            result.limbus.radius_mm = ep.radius * self._calibration.mm_per_px
+                            result.limbus.center_mm = self._calibration.point_px_to_mm((ep.center_x, ep.center_y))
+                            self.logger.debug("Heuristic limbus replaced from ring_inner (%.1f px)", ring_inner_px)
+        except Exception:
+            pass
 
         # -- Step 8: Corneal centre + offset ---------------------------
         result.corneal_center = self.corneal_calc.calculate(
@@ -810,6 +870,9 @@ class UnifiedDetector:
                 result.ring_center = ring_seg.center
             if ring_seg.radius is not None:
                 result.ring_radius = ring_seg.radius
+            # Attach inner radius estimate when available for downstream heuristics
+            if getattr(ring_seg, "inner_radius", None) is not None:
+                result.ring_inner_radius = ring_seg.inner_radius
             result.ring_status = RingStatus.PRESENT.value
 
     # ================================================================
@@ -1280,8 +1343,18 @@ class UnifiedDetector:
                 ring_result,
                 margin_frac=0.95,
             )
+        else:
+            # Pre-docked: ML model systematically overestimates limbus into sclera.
+            # Erode the mask to shrink it uniformly by ~7 pixels so subpixel
+            # refinement can catch the true inward edge.
+            kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (15, 15))
+            iris_mask = cv2.erode(iris_mask, kernel, iterations=1)
 
-        limbus_fit = self._fitter.fit(iris_mask, gray_image)
+        limbus_fit = self._fitter.fit(
+            iris_mask, 
+            gray_image, 
+            pupil_hint=pupil_fit
+        )
 
         # Validate pre-docking limbus concentricity and radius ratio
         if (
@@ -1384,6 +1457,7 @@ class UnifiedDetector:
         result: EyeDetectionResult,
         pupil_fit: Optional[FitResult],
         limbus_fit: Optional[FitResult],
+        force_limbus_overwrite: bool = False,
     ) -> None:
         """Overwrite pupil/limbus in *result* with SmartFitter output
         when the new fit is valid and at least as confident."""
@@ -1405,7 +1479,11 @@ class UnifiedDetector:
             ep = self._fit_result_to_ellipse_params(limbus_fit)
             new_conf = self._fit_result_confidence(limbus_fit)
 
-            if (not result.limbus.detected) or new_conf >= result.limbus.confidence:
+            if (
+                not result.limbus.detected
+                or force_limbus_overwrite
+                or new_conf >= result.limbus.confidence
+            ):
                 result.limbus.detected = True
                 result.limbus.ellipse = ep
                 result.limbus.confidence = new_conf
@@ -2107,7 +2185,7 @@ class _ONNXEngineWrapper:
             min_reflection_area=15,
             inpaint_radius=5,
             detect_red_highlights=True,
-            red_threshold_offset=20,
+            red_threshold_offset=25,
         )
         self._ring_masker = SuctionRingMasker()
         self._red_light_filter = None  # Lazy initialization
@@ -2140,10 +2218,22 @@ class _ONNXEngineWrapper:
         """
         # Apply identical preprocessing before ONNX inference
         clean_bgr = image
+        roi_mask = None
         if self._ring_masker is not None:
-            clean_bgr, _ = self._ring_masker.remove(clean_bgr)
+            try:
+                clean_bgr, marker_mask, ring_result = self._ring_masker.remove_with_diagnostics(clean_bgr)
+                if getattr(ring_result, "ring_centre", None) is not None:
+                    cx, cy = int(round(ring_result.ring_centre[0])), int(round(ring_result.ring_centre[1]))
+                    inner_r = int(round(ring_result.ring_inner_radius)) if getattr(ring_result, "ring_inner_radius", None) is not None else None
+                    if inner_r is not None and inner_r > 4:
+                        h, w = clean_bgr.shape[:2]
+                        roi_mask = np.zeros((h, w), dtype=np.uint8)
+                        cv2.circle(roi_mask, (cx, cy), inner_r, 255, -1)
+            except Exception:
+                clean_bgr, _ = self._ring_masker.remove(clean_bgr)
+
         if self._reflection_remover is not None:
-            clean_bgr, _ = self._reflection_remover.remove(clean_bgr)
+            clean_bgr, _ = self._reflection_remover.remove(clean_bgr, roi_mask=roi_mask)
 
         if self._red_light_enabled:
             if self._red_light_filter is None:

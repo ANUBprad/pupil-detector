@@ -390,11 +390,11 @@ class VideoProcessor:
             )
             cv2.drawMarker(
                 out, cc_pt, (10, 10, 10),
-                cv2.MARKER_CROSS, 22, 3, cv2.LINE_AA
+                cv2.MARKER_CROSS, 45, 4, cv2.LINE_AA
             )
             cv2.drawMarker(
-                out, cc_pt, (255, 255, 255),
-                cv2.MARKER_CROSS, 22, 2, cv2.LINE_AA
+                out, cc_pt, (255, 0, 255),
+                cv2.MARKER_CROSS, 45, 3, cv2.LINE_AA
             )
 
             # draw offset line from corneal centre to pupil centre

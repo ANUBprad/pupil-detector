@@ -1,3 +1,4 @@
+
 """
 Surgical-grade pupil & limbus tracking GUI.
 
@@ -116,7 +117,7 @@ _GRAYSCALE_COLORS = {
 _GRAYSCALE_CYCLE = ["off", "auto", "force"]
 # ══════════════════════════════════════════════════════════════════
 
-_WINDOW_TITLE = "Pupil & Limbus Tracker v2.3 — Surgical Grade"
+_WINDOW_TITLE = "Medevplus IXcentai — Surgical Grade"
 _MIN_WIDTH = 1280
 _MIN_HEIGHT = 800
 _DISPLAY_FPS_CAP = 30.0
@@ -125,7 +126,9 @@ _DISPLAY_FPS_CAP = 30.0
 class PupilTrackingGUI:
     def __init__(self, root: tk.Tk, colors=None) -> None:
         self.root = root
+        self.root.withdraw()
         self.root.title(_WINDOW_TITLE)
+        self.root.geometry(f"{_MIN_WIDTH}x{_MIN_HEIGHT}")
         self.root.minsize(_MIN_WIDTH, _MIN_HEIGHT)
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
 
@@ -206,6 +209,8 @@ class PupilTrackingGUI:
         self._bind_live_setting_callbacks()
         self._install_crash_guards()
 
+        self.root.update_idletasks()
+        self.root.deiconify()
         self.root.after(100, self._init_detector)
 
     # ================================================================
@@ -620,7 +625,8 @@ class PupilTrackingGUI:
                 self._hex_to_bgr(self._colors.CALIBRATION),
                 [
                     ("Source", self._cv_vars["source"].get()),
-                    ("Scale", self._cv_vars["scale"].get()),
+                    ("px/mm", self._cv_vars["scale_px"].get()),
+                    ("mm/px", self._cv_vars["scale_mm"].get()),
                     ("Reference", self._cv_vars["reference"].get()),
                 ],
             ),
@@ -812,7 +818,7 @@ class PupilTrackingGUI:
         self._show_offset = tk.BooleanVar(value=True)
         self._show_centers = tk.BooleanVar(value=True)
         self._show_ring_center = tk.BooleanVar(value=False)
-        self._show_measurements = tk.BooleanVar(value=True)
+        self._show_measurements = tk.BooleanVar(value=False)
         self._show_debug_overlay = tk.BooleanVar(value=False)
         view_menu.add_checkbutton(
             label="Show Overlay",
@@ -904,7 +910,6 @@ class PupilTrackingGUI:
             text="⏸ Pause",
             command=self._toggle_pause,
             state=tk.DISABLED,
-            width=10,
         )
         self._pause_btn.pack(side=tk.LEFT, padx=2)
 
@@ -919,7 +924,6 @@ class PupilTrackingGUI:
             toolbar,
             text="⏺ Start Rec",
             command=self._toggle_recording,
-            width=12,
         )
         self._rec_btn.pack(side=tk.LEFT, padx=2)
 
@@ -944,7 +948,6 @@ class PupilTrackingGUI:
             toolbar,
             text="🔲 RGB",
             command=self._toggle_grayscale,
-            width=10,
         )
         self._gray_btn.pack(side=tk.LEFT, padx=2)
 
@@ -961,14 +964,12 @@ class PupilTrackingGUI:
             toolbar,
             text="Set ROI",
             command=self._begin_roi_selection,
-            width=10,
         )
         self._roi_btn.pack(side=tk.LEFT, padx=2)
         ttk.Button(
             toolbar,
             text="Clear ROI",
             command=self._clear_manual_roi,
-            width=10,
         ).pack(side=tk.LEFT, padx=2)
         ttk.Label(
             toolbar,
@@ -980,14 +981,12 @@ class PupilTrackingGUI:
             toolbar,
             text="Set Ring",
             command=self._begin_ring_selection,
-            width=10,
         )
         self._ring_btn.pack(side=tk.LEFT, padx=2)
         ttk.Button(
             toolbar,
             text="Clear Ring",
             command=self._clear_manual_ring,
-            width=10,
         ).pack(side=tk.LEFT, padx=2)
         ttk.Label(
             toolbar,
@@ -1011,7 +1010,6 @@ class PupilTrackingGUI:
             toolbar,
             text="  NO IMAGE  ",
             style="Quality.TLabel",
-            width=28,
             anchor="center",
         )
         self._quality_label.pack(side=tk.RIGHT, padx=10)
@@ -1025,8 +1023,9 @@ class PupilTrackingGUI:
         main = ttk.PanedWindow(self.root, orient=tk.HORIZONTAL)
         main.pack(fill=tk.BOTH, expand=True, padx=2, pady=2)
 
+        # Default split ratio: 7:3 (image/loading on the left, panels on the right)
         left_frame = ttk.Frame(main, style="Primary.TFrame")
-        main.add(left_frame, weight=3)
+        main.add(left_frame, weight=65)
 
         self._build_progress_frame(left_frame)
 
@@ -1044,8 +1043,8 @@ class PupilTrackingGUI:
         self._canvas.bind("<ButtonRelease-1>", self._on_canvas_release)
         self._canvas.bind("<MouseWheel>", self._on_canvas_wheel)
 
-        right_frame = ttk.Frame(main, width=380)
-        main.add(right_frame, weight=1)
+        right_frame = ttk.Frame(main, width=500)
+        main.add(right_frame, weight=35)
 
         notebook = ttk.Notebook(right_frame)
         notebook.pack(fill=tk.BOTH, expand=True)
@@ -1061,6 +1060,19 @@ class PupilTrackingGUI:
         settings_frame = ttk.Frame(notebook, padding=8)
         notebook.add(settings_frame, text="⚙ Settings")
         self._build_settings_panel(settings_frame)
+
+        # Ensure the PanedWindow sash initial position is set once layout is realized.
+        # Without this, some Tk themes/OS window managers keep the sash at a default
+        # position until the user resizes the window.
+        def _set_initial_sash() -> None:
+            w = main.winfo_width()
+            if w is None or w <= 1:
+                self.root.after(150, _set_initial_sash)
+                return
+            main.sashpos(0, int(w * 0.70))
+
+        self.root.after(0, _set_initial_sash)
+
 
     def _build_progress_frame(self, parent: ttk.Frame) -> None:
         self._progress_outer = ttk.LabelFrame(
@@ -1393,20 +1405,20 @@ class PupilTrackingGUI:
             column: int,
             columnspan: int = 1,
         ) -> ttk.Frame:
-            card = ttk.Frame(pf, style="MetricCard.TFrame", padding=10)
+            card = ttk.Frame(pf, style="MetricCard.TFrame", padding=6)
             card.grid(
                 row=row,
                 column=column,
                 columnspan=columnspan,
                 sticky="nsew",
-                padx=4,
-                pady=4,
+                padx=3,
+                pady=3,
             )
             ttk.Label(
                 card,
                 text=title,
                 style=style_name,
-            ).pack(anchor=tk.W, pady=(0, 6))
+            ).pack(anchor=tk.W, pady=(0, 4))
             body = ttk.Frame(card, style="MetricCard.TFrame")
             body.pack(fill=tk.X)
             body.columnconfigure(1, weight=1)
@@ -1430,7 +1442,7 @@ class PupilTrackingGUI:
 
         def add_row(pf, label_text, width=16):
             row = ttk.Frame(pf, style="MetricCard.TFrame")
-            row.pack(fill=tk.X, pady=2)
+            row.pack(fill=tk.X, pady=1)
             row.columnconfigure(1, weight=1)
             ttk.Label(
                 row,
@@ -1446,7 +1458,7 @@ class PupilTrackingGUI:
                 style="CardValueSmall.TLabel",
                 anchor="e",
                 justify=tk.RIGHT,
-            ).grid(row=0, column=1, sticky="e")
+            ).grid(row=0, column=1, sticky="ew")
             return var
 
         summary_outer = ttk.Frame(scroll_frame)
@@ -1520,7 +1532,8 @@ class PupilTrackingGUI:
         calib_frame = add_card(cards_outer, "CALIBRATION", "CalibHeader.TLabel", 1, 1)
         self._cv_vars: Dict[str, tk.StringVar] = {}
         self._cv_vars["source"] = add_row(calib_frame, "Source:")
-        self._cv_vars["scale"] = add_row(calib_frame, "Scale:")
+        self._cv_vars["scale_px"] = add_row(calib_frame, "px/mm:")
+        self._cv_vars["scale_mm"] = add_row(calib_frame, "mm/px:")
         self._cv_vars["reference"] = add_row(calib_frame, "Reference:")
 
         proc_frame = add_card(cards_outer, "PROCESSING", "ProcHeader.TLabel", 2, 0, 2)
@@ -1761,7 +1774,9 @@ class PupilTrackingGUI:
         ]
         for c in candidates:
             if Path(c).is_file():
-                return str(Path(c).resolve())
+                found_path = str(Path(c).resolve())
+                self.logger.info(f"Loaded model from: {found_path}")
+                return found_path
         return None
 
     def _get_fast_engine(self) -> Optional[Any]:
@@ -1819,21 +1834,16 @@ class PupilTrackingGUI:
         engine = self._get_fast_engine()
         if engine is not None:
             engine.warmup()
-            self._engine_status_var.set(
+            msg = (
                 f"Engine: rebuilt ({engine.device}, "
                 f"res={self._resolution_var.get()}, "
                 f"fp16={self._fp16_var.get()})"
             )
-            messagebox.showinfo(
-                "Engine Rebuilt",
-                f"FastInference rebuilt on {engine.device}.",
-            )
+            self._engine_status_var.set(msg)
+            self._status_var.set(msg)
         else:
             self._engine_status_var.set("Engine: rebuild FAILED")
-            messagebox.showwarning(
-                "Engine Rebuild Failed",
-                "Could not create FastInference.\nCheck model path and logs.",
-            )
+            self._status_var.set("Engine rebuild failed — check model path and logs")
 
     def _apply_performance_preset(self) -> None:
         preset = self._performance_preset_var.get()
@@ -1936,7 +1946,7 @@ class PupilTrackingGUI:
             self._roi_preview = dict(active_roi)
         else:
             h, w = self._current_image.shape[:2]
-            radius = max(20.0, min(w, h) * 0.18)
+            radius = 939.0 / 2.0
             self._roi_preview = {
                 "center_x": w / 2.0,
                 "center_y": h / 2.0,
@@ -2026,7 +2036,7 @@ class PupilTrackingGUI:
             self._roi_preview = {
                 "center_x": point[0],
                 "center_y": point[1],
-                "radius": max(20.0, min(w, h) * 0.12),
+                "radius": 939.0 / 2.0,
                 "frame_width": float(w),
                 "frame_height": float(h),
             }
@@ -2143,6 +2153,7 @@ class PupilTrackingGUI:
             f"Manual Ring: Locked ({int(round(self._manual_ring['radius'] * 2.0))} px)"
         )
         self._status_var.set("Manual docked ring locked and applied to offset calculation")
+        self._show_ring_center.set(True)
         self._apply_manual_ring_to_processor()
         if self._current_result is not None:
             self._apply_manual_ring_policy(self._current_result)
@@ -2375,7 +2386,11 @@ class PupilTrackingGUI:
         else:
             center_x = w / 2.0
             center_y = h / 2.0
-            radius = max(12.0, min(w, h) * 0.42)
+            if self._current_result is not None and hasattr(self._current_result, "calibration") and self._current_result.calibration.calibrated:
+                px_per_mm = self._current_result.calibration.px_per_mm
+                radius = max(12.0, (14.1 * px_per_mm) / 2.0)
+            else:
+                radius = max(12.0, min(w, h) * 0.42)
         return {
             "center_x": center_x,
             "center_y": center_y,
@@ -3782,7 +3797,7 @@ class PupilTrackingGUI:
         self._canvas.create_text(
             cx,
             cy - 60,
-            text="Pupil & Limbus Tracker",
+            text="Medevplus IXcentai",
             fill=c.FG_PRIMARY,
             font=("Segoe UI", 22, "bold"),
             anchor="center",
@@ -3790,7 +3805,7 @@ class PupilTrackingGUI:
         self._canvas.create_text(
             cx,
             cy - 20,
-            text="Surgical-Grade Detection",
+            text="surgical grade",
             fill=c.ACCENT,
             font=("Segoe UI", 13),
             anchor="center",
@@ -3929,23 +3944,32 @@ class PupilTrackingGUI:
         p_cx = p_ellipse.center_x
         p_cy = p_ellipse.center_y
 
-        # Calculate intersection points on the limbus boundary in 4 directions
-        up_pt = self._get_ellipse_intersection(l_ellipse, p_cx, p_cy, 0.0, -1.0)
-        down_pt = self._get_ellipse_intersection(l_ellipse, p_cx, p_cy, 0.0, 1.0)
-        left_pt = self._get_ellipse_intersection(l_ellipse, p_cx, p_cy, -1.0, 0.0)
-        right_pt = self._get_ellipse_intersection(l_ellipse, p_cx, p_cy, 1.0, 0.0)
+        # Calculate intersection points on the pupil boundary
+        p_up_pt = self._get_ellipse_intersection(p_ellipse, p_cx, p_cy, 0.0, -1.0)
+        p_down_pt = self._get_ellipse_intersection(p_ellipse, p_cx, p_cy, 0.0, 1.0)
+        p_left_pt = self._get_ellipse_intersection(p_ellipse, p_cx, p_cy, -1.0, 0.0)
+        p_right_pt = self._get_ellipse_intersection(p_ellipse, p_cx, p_cy, 1.0, 0.0)
 
-        p_center = (int(round(p_cx)), int(round(p_cy)))
+        l_cx = l_ellipse.center_x
+        l_cy = l_ellipse.center_y
+
+        # Calculate intersection points on the limbus boundary
+        l_up_pt = self._get_ellipse_intersection(l_ellipse, l_cx, l_cy, 0.0, -1.0)
+        l_down_pt = self._get_ellipse_intersection(l_ellipse, l_cx, l_cy, 0.0, 1.0)
+        l_left_pt = self._get_ellipse_intersection(l_ellipse, l_cx, l_cy, -1.0, 0.0)
+        l_right_pt = self._get_ellipse_intersection(l_ellipse, l_cx, l_cy, 1.0, 0.0)
 
         # Colors (BGR)
         green_color = (0, 255, 0)      # Pupil green
         blue_color = (255, 100, 0)     # Limbus blue
 
-        # Draw the 4 segments from pupil center to limbus boundary
-        cv2.line(out, p_center, (int(round(up_pt[0])), int(round(up_pt[1]))), green_color, 1, cv2.LINE_AA)
-        cv2.line(out, p_center, (int(round(down_pt[0])), int(round(down_pt[1]))), blue_color, 1, cv2.LINE_AA)
-        cv2.line(out, p_center, (int(round(left_pt[0])), int(round(left_pt[1]))), green_color, 1, cv2.LINE_AA)
-        cv2.line(out, p_center, (int(round(right_pt[0])), int(round(right_pt[1]))), blue_color, 1, cv2.LINE_AA)
+        # Draw pupil cross
+        cv2.line(out, (int(round(p_left_pt[0])), int(round(p_left_pt[1]))), (int(round(p_right_pt[0])), int(round(p_right_pt[1]))), green_color, 1, cv2.LINE_AA)
+        cv2.line(out, (int(round(p_up_pt[0])), int(round(p_up_pt[1]))), (int(round(p_down_pt[0])), int(round(p_down_pt[1]))), green_color, 1, cv2.LINE_AA)
+
+        # Draw limbus cross
+        cv2.line(out, (int(round(l_left_pt[0])), int(round(l_left_pt[1]))), (int(round(l_right_pt[0])), int(round(l_right_pt[1]))), blue_color, 1, cv2.LINE_AA)
+        cv2.line(out, (int(round(l_up_pt[0])), int(round(l_up_pt[1]))), (int(round(l_down_pt[0])), int(round(l_down_pt[1]))), blue_color, 1, cv2.LINE_AA)
 
         # Draw ASCII degree labels
         font = cv2.FONT_HERSHEY_SIMPLEX
@@ -3953,19 +3977,19 @@ class PupilTrackingGUI:
         lbl_color = (220, 220, 220)
 
         # UP: 270 degrees
-        up_x, up_y = int(round(up_pt[0])), int(round(up_pt[1]))
+        up_x, up_y = int(round(l_up_pt[0])), int(round(l_up_pt[1]))
         cv2.putText(out, "270", (up_x - int(10 * scale), up_y - int(5 * scale)), font, font_sz, lbl_color, 1, cv2.LINE_AA)
 
         # DOWN: 90 degrees
-        down_x, down_y = int(round(down_pt[0])), int(round(down_pt[1]))
+        down_x, down_y = int(round(l_down_pt[0])), int(round(l_down_pt[1]))
         cv2.putText(out, "90", (down_x - int(7 * scale), down_y + int(12 * scale)), font, font_sz, lbl_color, 1, cv2.LINE_AA)
 
         # LEFT: 0 degrees
-        left_x, left_y = int(round(left_pt[0])), int(round(left_pt[1]))
+        left_x, left_y = int(round(l_left_pt[0])), int(round(l_left_pt[1]))
         cv2.putText(out, "0", (left_x - int(15 * scale), left_y + int(4 * scale)), font, font_sz, lbl_color, 1, cv2.LINE_AA)
 
         # RIGHT: 180 degrees
-        right_x, right_y = int(round(right_pt[0])), int(round(right_pt[1]))
+        right_x, right_y = int(round(l_right_pt[0])), int(round(l_right_pt[1]))
         cv2.putText(out, "180", (right_x + int(5 * scale), right_y + int(4 * scale)), font, font_sz, lbl_color, 1, cv2.LINE_AA)
 
 
@@ -3989,13 +4013,20 @@ class PupilTrackingGUI:
                 else:
                     cv2.circle(out, (cx, cy), rr, (0, 0, 255), 2, cv2.LINE_AA)
                 if self._show_ring_center.get():
+                    _base = max(4, int(10 * scale))
+                    _cal_mm_per_px = getattr(result.calibration, "mm_per_px", 0.0) or 0.0
+                    if _cal_mm_per_px > 0:
+                        _ring_cross_size = int(max(10, round(_base + (0.5 / _cal_mm_per_px) * scale)))
+                    else:
+                        _ring_cross_size = int(max(12, min(_base, 26)))
                     cv2.drawMarker(
                         out,
                         (cx, cy),
                         (0, 0, 255),
                         cv2.MARKER_CROSS,
-                        max(10, int(16 * scale)),
+                        _ring_cross_size,
                         2,
+                        cv2.LINE_AA,
                     )
                 if self._show_measurements.get():
                     label = f"R={ring_radius * 2.0:.0f}px"
@@ -4092,22 +4123,26 @@ class PupilTrackingGUI:
                 int(round(cc.center_px[0] * scale)),
                 int(round(cc.center_px[1] * scale)),
             )
-            marker_size = max(14, int(22 * scale))
-            cv2.drawMarker(
-                out,
-                center_pt,
-                (10, 10, 10),
-                cv2.MARKER_CROSS,
-                marker_size,
-                3,
-                cv2.LINE_AA,
-            )
+            # Marker size is specified in *display* pixels. To keep the marker
+            # size physically meaningful, we scale it using the current
+            # calibration when available.
+            #
+            # Marker size is specified in *display* pixels.
+            # Keep the marker size physically meaningful by converting
+            # a desired physical offset (+3mm relative to the previous
+            # baseline marker) into image pixels using calibration.
+            _base = max(4, int(10 * scale))
+            cal_mm_per_px = getattr(result.calibration, "mm_per_px", 0.0) or 0.0
+            if cal_mm_per_px > 0:
+                cursor_size = int(max(10, round(_base + (0.5 / cal_mm_per_px) * scale)))
+            else:
+                cursor_size = int(max(12, min(_base, 26)))
             cv2.drawMarker(
                 out,
                 center_pt,
                 (255, 255, 255),
                 cv2.MARKER_CROSS,
-                marker_size,
+                cursor_size,
                 2,
                 cv2.LINE_AA,
             )
@@ -4141,13 +4176,20 @@ class PupilTrackingGUI:
                 dy = p.center_y - l.center_y
             cv2.line(out, p_pt, ref_pt, (0, 255, 255), 2, cv2.LINE_AA)
             if self._show_centers.get():
+                _base = max(4, int(10 * scale))
+                _cal_mm_per_px = getattr(result.calibration, "mm_per_px", 0.0) or 0.0
+                if _cal_mm_per_px > 0:
+                    _offset_cross_size = int(max(10, round(_base + (0.5 / _cal_mm_per_px) * scale)))
+                else:
+                    _offset_cross_size = int(max(12, min(_base, 26)))
                 cv2.drawMarker(
                     out,
                     ref_pt,
-                    (0, 255, 255),
+                    (255, 255, 255),
                     cv2.MARKER_CROSS,
-                    max(8, int(15 * scale)),
+                    _offset_cross_size,
                     2,
+                    cv2.LINE_AA,
                 )
             if self._show_measurements.get():
                 offset_px = math.hypot(dx, dy)
@@ -4229,25 +4271,11 @@ class PupilTrackingGUI:
         # ══════════════════════════════════════════════════════════
         # GRAYSCALE GUI 12 of 12 — Grayscale mode badge on image
         # ══════════════════════════════════════════════════════════
+        # (Removed) Grayscale mode badge text overlay (top-right).
+        # Grayscale processing (OFF/AUTO/FORCE) and overlays remain active; 
+        # only the on-image text label was removed to reduce clutter.
         mode = self._grayscale_mode_var.get()
-        if mode != "off":
-            gs_label = _GRAYSCALE_LABELS.get(mode, "?")
-            gs_bgr = {
-                "auto": (255, 255, 0),
-                "force": (0, 255, 255),
-            }
-            gs_color = gs_bgr.get(mode, (200, 200, 200))
-            font_scale_gs = max(0.35, 0.55 * scale)
-            cv2.putText(
-                out,
-                f"GRAY: {gs_label}",
-                (w - max(120, int(160 * scale)), 55),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                font_scale_gs,
-                gs_color,
-                2,
-                cv2.LINE_AA,
-            )
+        _ = mode  # keep reference to avoid unused variable warnings
         # ══════════════════════════════════════════════════════════
 
         font_scale_a = max(0.25, 0.4 * scale)
@@ -4348,6 +4376,40 @@ class PupilTrackingGUI:
         handle_x = cx + radius
         handle_y = cy
         cv2.circle(out, (handle_x, handle_y), max(4, int(6 * scale)), color, -1)
+        
+        dia_px = roi["radius"] * 2.0
+        dia_str = f"Dia: {dia_px:.0f}px"
+        if self._current_result is not None and getattr(self._current_result, "calibration", None) is not None and self._current_result.calibration.calibrated:
+            dia_mm = dia_px * self._current_result.calibration.mm_per_px
+            dia_str += f" ({dia_mm:.2f}mm)"
+        
+        label = f"ROI {dia_str} (Enter=lock)" if is_editing else f"ROI {dia_str}"
+        font_scale = max(0.4, 0.5 * scale)
+        (text_w, _), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, font_scale, 1)
+        text_x = max(10, cx - radius - text_w - 10)
+        if is_editing:
+            cv2.putText(
+                out,
+                label,
+                (text_x, cy),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                font_scale,
+                color,
+                1,
+                cv2.LINE_AA,
+            )
+        
+            caption = "ROI Edit: drag move/resize, arrows nudge, Enter apply, Esc cancel"
+            cv2.putText(
+                out,
+                caption,
+                (max(10, cx - radius), max(20, cy - radius - 8)),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                max(0.35, 0.48 * scale),
+                color,
+                1,
+                cv2.LINE_AA,
+            )
 
     def _draw_manual_ring_overlay(self, out: np.ndarray, scale: float) -> None:
         ring = (
@@ -4374,7 +4436,14 @@ class PupilTrackingGUI:
         handle_x = cx + radius
         handle_y = cy
         cv2.circle(out, (handle_x, handle_y), max(4, int(6 * scale)), color, -1)
-        label = "Manual Ring (Enter=lock)" if is_editing else "Manual Ring"
+        
+        dia_px = ring["radius"] * 2.0
+        dia_str = f"Dia: {dia_px:.0f}px"
+        if self._current_result is not None and getattr(self._current_result, "calibration", None) is not None and self._current_result.calibration.calibrated:
+            dia_mm = dia_px * self._current_result.calibration.mm_per_px
+            dia_str += f" ({dia_mm:.2f}mm)"
+            
+        label = f"Manual Ring {dia_str} (Enter=lock)" if is_editing else f"Manual Ring {dia_str}"
         cv2.putText(
             out,
             label,
@@ -4386,21 +4455,19 @@ class PupilTrackingGUI:
             cv2.LINE_AA,
         )
         cv2.circle(out, (handle_x, handle_y), max(5, int(7 * scale)), (20, 20, 20), 1)
-        caption = (
-            "ROI Edit: drag move/resize, arrows nudge, Enter apply, Esc cancel"
-            if is_editing
-            else "Manual ROI"
-        )
-        cv2.putText(
-            out,
-            caption,
-            (max(10, cx - radius), max(20, cy - radius - 8)),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            max(0.35, 0.48 * scale),
-            color,
-            1,
-            cv2.LINE_AA,
-        )
+        
+        if is_editing:
+            caption = "Ring Edit: drag move/resize, arrows nudge, Enter apply, Esc cancel"
+            cv2.putText(
+                out,
+                caption,
+                (max(10, cx - radius), max(20, cy - radius - 8)),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                max(0.35, 0.48 * scale),
+                color,
+                1,
+                cv2.LINE_AA,
+            )
 
     @staticmethod
     def _draw_structure(
@@ -4514,8 +4581,8 @@ class PupilTrackingGUI:
                 dy = p.center_y - l.center_y
             cv2.line(out, p_pt, ref_pt, (0, 255, 255), 2, cv2.LINE_AA)
             if self._show_centers.get():
-                cv2.drawMarker(out, ref_pt, (10, 10, 10), cv2.MARKER_CROSS, 22, 3, cv2.LINE_AA)
-                cv2.drawMarker(out, ref_pt, (255, 255, 255), cv2.MARKER_CROSS, 22, 2, cv2.LINE_AA)
+                cv2.drawMarker(out, ref_pt, (10, 10, 10), cv2.MARKER_CROSS, 20, 2, cv2.LINE_AA)
+                cv2.drawMarker(out, ref_pt, (255, 0, 255), cv2.MARKER_CROSS, 20, 2, cv2.LINE_AA)
             if self._show_measurements.get():
                 offset_px = math.hypot(dx, dy)
                 mid = ((p_pt[0] + ref_pt[0]) // 2, (p_pt[1] + ref_pt[1]) // 2)
@@ -4567,28 +4634,9 @@ class PupilTrackingGUI:
             1,
         )
 
-        # ══════════════════════════════════════════════════════════
-        # GRAYSCALE GUI 12 of 12 — Grayscale mode badge on image
-        # ══════════════════════════════════════════════════════════
-        mode = self._grayscale_mode_var.get()
-        if mode != "off":
-            gs_label = _GRAYSCALE_LABELS.get(mode, "?")
-            gs_bgr = {
-                "auto": (255, 255, 0),  # cyan
-                "force": (0, 255, 255),  # yellow
-            }
-            gs_color = gs_bgr.get(mode, (200, 200, 200))
-            cv2.putText(
-                out,
-                f"GRAY: {gs_label}",
-                (w - 160, 55),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.55,
-                gs_color,
-                2,
-                cv2.LINE_AA,
-            )
-        # ══════════════════════════════════════════════════════════
+        # (Hidden) GRAYSCALE GUI 12 of 12 — Grayscale mode badge on image
+        # Removed to avoid showing overlay text when user loads an image.
+
 
         for i, alert in enumerate(result.alerts[:3]):
             cv2.putText(
@@ -4761,18 +4809,18 @@ class PupilTrackingGUI:
 
             if has_cal:
                 self._cv_vars["source"].set(cal.source)
-                self._cv_vars["scale"].set(
-                    f"{cal.px_per_mm:.2f} px/mm  |  {cal.mm_per_px:.4f} mm/px"
-                )
+                self._cv_vars["scale_px"].set(f"{cal.px_per_mm:.2f} px/mm")
+                self._cv_vars["scale_mm"].set(f"{cal.mm_per_px:.4f} mm/px")
                 if cal.reference_diameter_mm > 0:
                     self._cv_vars["reference"].set(
-                        f"{cal.reference_diameter_mm:.1f} mm  ({cal.reference_diameter_px:.0f} px)"
+                        f"{cal.reference_diameter_mm:.1f}mm ({cal.reference_diameter_px:.0f}px)"
                     )
                 else:
                     self._cv_vars["reference"].set("---")
             else:
                 self._cv_vars["source"].set("not calibrated")
-                self._cv_vars["scale"].set("---")
+                self._cv_vars["scale_px"].set("---")
+                self._cv_vars["scale_mm"].set("---")
                 self._cv_vars["reference"].set("---")
 
             proc_ms = float(getattr(result.metadata, "processing_time_ms", 0.0) or 0.0)
@@ -5147,9 +5195,20 @@ class PupilTrackingGUI:
 
 def launch_gui() -> None:
     root = tk.Tk()
+    root.withdraw()
+    try:
+        import os
+        import sys
+        # gui_app.py is in pupil_tracking/interface/, so base is 3 levels up
+        base_dir = getattr(sys, '_MEIPASS', os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+        icon_path = os.path.join(base_dir, "build", "assets", "icon.ico")
+        if os.path.exists(icon_path):
+            root.iconbitmap(icon_path)
+    except Exception:
+        pass
+        
     try:
         from ctypes import windll
-
         windll.shcore.SetProcessDpiAwareness(1)
     except Exception:
         pass

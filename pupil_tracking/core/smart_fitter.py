@@ -773,6 +773,7 @@ class SmartContourFitter:
         self,
         binary_mask: np.ndarray,
         gray_image: Optional[np.ndarray] = None,
+        pupil_hint: Optional["FitResult"] = None,
     ) -> FitResult:
         """
         Fit the largest contour in a binary mask.
@@ -780,6 +781,9 @@ class SmartContourFitter:
         Args:
             binary_mask: uint8 binary mask (0/255 or 0/1)
             gray_image: optional grayscale image for sub-pixel refinement
+            pupil_hint: optional FitResult of the pupil, used to filter out
+                limbus points that bleed into the sclera by removing points
+                that are too far from the median radius.
 
         Returns:
             FitResult with all measurements
@@ -803,6 +807,21 @@ class SmartContourFitter:
 
         if len(pts) < self.min_contour_points:
             return FitResult()
+
+        if pupil_hint is not None and pupil_hint.valid:
+            dx = pts[:, 0] - pupil_hint.center_x
+            dy = pts[:, 1] - pupil_hint.center_y
+            distances = np.hypot(dx, dy)
+            median_dist = np.median(distances)
+            
+            # Filter points too far from median radius (fixes limbus bleeding into sclera)
+            upper_bound = median_dist * 1.15
+            lower_bound = median_dist * 0.85
+            mask_pts = (distances >= lower_bound) & (distances <= upper_bound)
+            
+            # Apply filter if we keep enough points
+            if np.sum(mask_pts) >= max(self.min_contour_points, int(len(pts) * 0.25)):
+                pts = pts[mask_pts]
 
         if self.subpixel_refine and gray_image is not None:
             sp = self._subpixel_cfg

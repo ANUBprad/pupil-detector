@@ -471,17 +471,25 @@ class AdaptiveContourFilter:
             # ── ring-specific spatial constraints ─────────────────
             if has_ring:
                 ring_cx, ring_cy = ring_result.ring_center
-                ring_r = ring_result.ring_radius
+                # Prefer inner_radius (opening) for spatial constraints
+                ring_r_outer = ring_result.ring_radius
+                ring_inner = (
+                    ring_result.ring_inner_radius
+                    if getattr(ring_result, "ring_inner_radius", None) is not None
+                    else (ring_r_outer * 0.80 if ring_r_outer else None)
+                )
 
-                # Contour centre must be inside the ring opening
-                dist = np.sqrt((cx - ring_cx) ** 2 + (cy - ring_cy) ** 2)
-                max_allowed_dist = ring_r * 0.75
-                if dist > max_allowed_dist:
-                    continue
+                # Contour centre must be inside the ring opening (use inner radius)
+                if ring_inner is not None:
+                    dist = np.sqrt((cx - ring_cx) ** 2 + (cy - ring_cy) ** 2)
+                    max_allowed_dist = ring_inner * 0.85
+                    if dist > max_allowed_dist:
+                        continue
 
-                # Equivalent radius must be much smaller than ring
+                # Equivalent radius must be much smaller than ring inner opening
                 equiv_r = np.sqrt(area / np.pi)
-                if equiv_r > ring_r * 0.60:
+                ref_r = ring_inner if ring_inner is not None else ring_r_outer
+                if ref_r is not None and equiv_r > ref_r * 0.60:
                     # Likely the ring contour itself — skip
                     continue
 

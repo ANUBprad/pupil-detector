@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """
 ╔======================================================================╗
-║           PUPIL & LIMBUS TRACKER — SURGICAL GRADE v2.3             ║
-║                    Main Application Entry Point                     ║
+║           Medevplus IXcentai surgical grade                        ║
 ╚======================================================================╝
 
 USAGE EXAMPLES:
@@ -73,7 +72,7 @@ _RUNTIME_PROFILE = apply_runtime_optimizations(detect_runtime_profile())
 # -- Constants ---------------------------------------------------
 _CORNEAL_DIAMETER_MM = 11.5
 
-_BANNER = "PUPIL & LIMBUS TRACKER - Surgical Grade v2.3"
+_BANNER = "Medevplus IXcentai - Surgical Grade"
 
 
 # ================================================================
@@ -218,6 +217,13 @@ def process_image(
     has_cal = cal.calibrated if cal else False
     mm_per_px = cal.mm_per_px if has_cal else 0.0
 
+    # -- corneal centre reference (use blended when available) -------
+    cc_ref = getattr(result, 'corneal_reference_source', 'pupil')
+    if hasattr(result, 'corneal_center'):
+        cc = result.corneal_center
+        if cc.valid and hasattr(cc, 'center_px'):
+            cc_ref = f"blended ({cc.center_px[0]:.1f}, {cc.center_px[1]:.1f})"
+
     print(f"\n{'=' * 64}")
     print(f"  IMAGE ANALYSIS RESULTS")
     print(f"{'=' * 64}")
@@ -227,6 +233,7 @@ def process_image(
         f" × {result.metadata.image_height} px"
     )
     print(f"  Category:   {getattr(result, 'image_category', 'unknown').upper()}")
+    print(f"  Corneal Ref:{cc_ref}")
 
     ring_status = getattr(result, "ring_status", "unknown")
     ring_conf = getattr(result, "ring_confidence", 0.0)
@@ -1369,6 +1376,8 @@ def _export_results_csv(results: List[Dict[str, Any]], csv_path: str) -> None:
         return
 
     rows: List[Dict[str, Any]] = []
+    prev_pupil_px = None
+    prev_limbus_px = None
     for r in results:
         pupil = r.get("pupil", {})
         limbus = r.get("limbus", {})
@@ -1383,6 +1392,19 @@ def _export_results_csv(results: List[Dict[str, Any]], csv_path: str) -> None:
         limbus_dia_px = le.get("radius", 0) * 2 if le.get("radius") else ""
         pupil_dia_mm = pupil_dia_px * mm_px if pupil_dia_px and mm_px else ""
         limbus_dia_mm = limbus_dia_px * mm_px if limbus_dia_px and mm_px else ""
+        # compute deltas vs previous frame (px)
+        pupil_delta = ""
+        limbus_delta = ""
+        try:
+            if prev_pupil_px is not None and isinstance(pupil_dia_px, (int, float)):
+                pupil_delta = pupil_dia_px - prev_pupil_px
+        except Exception:
+            pupil_delta = ""
+        try:
+            if prev_limbus_px is not None and isinstance(limbus_dia_px, (int, float)):
+                limbus_delta = limbus_dia_px - prev_limbus_px
+        except Exception:
+            limbus_delta = ""
 
         rows.append(
             {
@@ -1393,6 +1415,7 @@ def _export_results_csv(results: List[Dict[str, Any]], csv_path: str) -> None:
                 "pupil_cy_px": pe.get("center_y", ""),
                 "pupil_diameter_px": pupil_dia_px,
                 "pupil_diameter_mm": pupil_dia_mm,
+                "pupil_diameter_delta_px": pupil_delta,
                 "pupil_fit_type": pupil.get("fit_type", ""),
                 "pupil_confidence": pupil.get("confidence", ""),
                 "limbus_detected": limbus.get("detected", False),
@@ -1400,6 +1423,7 @@ def _export_results_csv(results: List[Dict[str, Any]], csv_path: str) -> None:
                 "limbus_cy_px": le.get("center_y", ""),
                 "limbus_diameter_px": limbus_dia_px,
                 "limbus_diameter_mm": limbus_dia_mm,
+                "limbus_diameter_delta_px": limbus_delta,
                 "limbus_fit_type": limbus.get("fit_type", ""),
                 "limbus_confidence": limbus.get("confidence", ""),
                 "offset_px": cc.get("offset_magnitude_px", ""),
@@ -1412,10 +1436,80 @@ def _export_results_csv(results: List[Dict[str, Any]], csv_path: str) -> None:
             }
         )
 
+        # update previous frame values
+        try:
+            prev_pupil_px = float(pupil_dia_px) if isinstance(pupil_dia_px, (int, float)) else None
+        except Exception:
+            prev_pupil_px = None
+        try:
+            prev_limbus_px = float(limbus_dia_px) if isinstance(limbus_dia_px, (int, float)) else None
+        except Exception:
+            prev_limbus_px = None
+
     with open(csv_path, "w", newline="") as fh:
         writer = csv.DictWriter(fh, fieldnames=rows[0].keys())
         writer.writeheader()
         writer.writerows(rows)
+        # Append summary statistics: average pupil/limbus diameter pre/post dock
+        try:
+            # compute averages grouped by ring_status
+            pre_pupil = []
+            post_pupil = []
+            pre_limbus = []
+            post_limbus = []
+            for r in rows:
+                try:
+                    rs = r.get("ring_status", "")
+                    pd = r.get("pupil_diameter_mm")
+                    ld = r.get("limbus_diameter_mm")
+                    if isinstance(pd, (int, float)) and pd > 0:
+                        if rs == "ring_present" or rs == "PRESENT":
+                            post_pupil.append(pd)
+                        else:
+                            pre_pupil.append(pd)
+                    if isinstance(ld, (int, float)) and ld > 0:
+                        if rs == "ring_present" or rs == "PRESENT":
+                            post_limbus.append(ld)
+                        else:
+                            pre_limbus.append(ld)
+                except Exception:
+                    continue
+
+            def mean_or_empty(arr):
+                return float(sum(arr) / len(arr)) if arr else ""
+
+            summary = {
+                "frame": "SUMMARY",
+                "ring_status": "",
+                "pupil_diameter_mm": mean_or_empty(pre_pupil),
+                "limbus_diameter_mm": mean_or_empty(pre_limbus),
+                "pupil_diameter_delta_px": "(pre_avg)",
+            }
+            writer.writerow({k: summary.get(k, "") for k in rows[0].keys()})
+            summary2 = {
+                "frame": "SUMMARY",
+                "ring_status": "docked_avg",
+                "pupil_diameter_mm": mean_or_empty(post_pupil),
+                "limbus_diameter_mm": mean_or_empty(post_limbus),
+                "pupil_diameter_delta_px": "(docked_avg)",
+            }
+            writer.writerow({k: summary2.get(k, "") for k in rows[0].keys()})
+            # write diff row
+            try:
+                diff_pupil = ""
+                if isinstance(summary2.get("pupil_diameter_mm"), float) and isinstance(summary.get("pupil_diameter_mm"), float):
+                    diff_pupil = summary2.get("pupil_diameter_mm") - summary.get("pupil_diameter_mm")
+                diff_row = {k: "" for k in rows[0].keys()}
+                diff_row["frame"] = "SUMMARY"
+                diff_row["ring_status"] = "docked_minus_pre"
+                diff_row["pupil_diameter_mm"] = diff_pupil
+                writer.writerow(diff_row)
+            except Exception:
+                # fail silently on diff row
+                pass
+        except Exception:
+            # never fail CSV export for summary
+            pass
 
 
 # ================================================================
@@ -1429,7 +1523,7 @@ def _build_parser() -> argparse.ArgumentParser:
         description=(
             "\n"
             "==============================================================\n"
-            "PUPIL & LIMBUS TRACKER - Surgical Grade v2.3\n"
+            "Medevplus IXcentai surgical grade\n"
             "Deep learning pupil/iris detection & tracking\n"
             "==============================================================\n"
         ),
@@ -1728,8 +1822,17 @@ def main() -> None:
 
             root = _tk.Tk()
             try:
+                import os
+                import sys
+                base_dir = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
+                icon_path = os.path.join(base_dir, "build", "assets", "icon.ico")
+                if os.path.exists(icon_path):
+                    root.iconbitmap(icon_path)
+            except Exception:
+                pass
+                
+            try:
                 from ctypes import windll
-
                 windll.shcore.SetProcessDpiAwareness(1)
             except Exception:
                 pass

@@ -195,7 +195,7 @@ class DarkTheme:
             "CardValueSmall.TLabel",
             background=colors.BG_TERTIARY,
             foreground=colors.FG_PRIMARY,
-            font=("Consolas", 10),
+            font=("Consolas", 9),
         )
         # Quality badge
         style.configure(

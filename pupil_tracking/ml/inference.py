@@ -113,7 +113,7 @@ class SegmentationInference:
             min_reflection_area=15,
             inpaint_radius=5,
             detect_red_highlights=True,
-            red_threshold_offset=20,
+            red_threshold_offset=25,
         )
         self._ring_masker = SuctionRingMasker()
         self._red_light_filter = None  # Lazy initialization
@@ -486,6 +486,7 @@ class SegmentationInference:
             scale_x=scale_x,
             scale_y=scale_y,
             gray_model=gray_resized,
+            pupil_hint=result.pupil,
         )
 
         # Store raw mask for downstream SmartContourFitter
@@ -518,8 +519,23 @@ class SegmentationInference:
 
         Requires PyTorch — only called when ``_HAS_TORCH`` is True.
         """
-        clean_bgr, _ = self._ring_masker.remove(image_bgr)
-        clean_bgr, _ = self._reflection_remover.remove(clean_bgr)
+        # Try to obtain ring diagnostics to build an ROI for reflection removal
+        roi_mask = None
+        if self._ring_masker is not None:
+            try:
+                clean_bgr, marker_mask, ring_result = self._ring_masker.remove_with_diagnostics(image_bgr)
+                if getattr(ring_result, "ring_centre", None) is not None:
+                    cx, cy = int(round(ring_result.ring_centre[0])), int(round(ring_result.ring_centre[1]))
+                    inner_r = int(round(ring_result.ring_inner_radius)) if getattr(ring_result, "ring_inner_radius", None) is not None else None
+                    if inner_r is not None and inner_r > 4:
+                        h, w = clean_bgr.shape[:2]
+                        roi_mask = np.zeros((h, w), dtype=np.uint8)
+                        cv2.circle(roi_mask, (cx, cy), inner_r, 255, -1)
+            except Exception:
+                clean_bgr, _ = self._ring_masker.remove(image_bgr)
+
+        # Reflection removal with ROI when possible
+        clean_bgr, _ = self._reflection_remover.remove(clean_bgr, roi_mask=roi_mask)
 
         # Lazy initialize red light filter if not already done
         if self._red_light_filter is None:
@@ -961,6 +977,7 @@ class SegmentationInference:
         scale_x: float,
         scale_y: float,
         gray_model: Optional[np.ndarray] = None,
+        pupil_hint: Optional[PupilDetection] = None,
     ) -> LimbusDetection:
         detection = LimbusDetection()
         detection.method = DetectionMethod.ML
@@ -998,6 +1015,31 @@ class SegmentationInference:
         contour = max(contours, key=cv2.contourArea)
         if len(contour) < max(5, self.cfg.detection.min_contour_points):
             return detection
+
+        # --- Pupil-Guided Limbus Contour Filtering ---
+        if pupil_hint is not None and pupil_hint.detected and pupil_hint.ellipse is not None:
+            # We need the pupil center in the model's unscaled coordinate space
+            model_cx = pupil_hint.ellipse.center_x / scale_x
+            model_cy = pupil_hint.ellipse.center_y / scale_y
+
+            pts = contour.reshape(-1, 2).astype(np.float64)
+            dx = pts[:, 0] - model_cx
+            dy = pts[:, 1] - model_cy
+            dists = np.sqrt(dx**2 + dy**2)
+
+            # The limbus radius should be relatively constant around the pupil
+            r_med = np.median(dists)
+
+            # Normal limbus radius is very constant. Allow +/- 15% variation.
+            keep = (dists >= r_med * 0.85) & (dists <= r_med * 1.15)
+            kept_pts = pts[keep]
+
+            if len(kept_pts) >= max(5, self.cfg.detection.min_contour_points) and len(kept_pts) > len(pts) * 0.25:
+                contour = kept_pts.reshape(-1, 1, 2).astype(np.int32)
+                self.logger.debug(
+                    "Filtered limbus contour using pupil anchor: kept %d/%d points",
+                    len(kept_pts), len(pts)
+                )
 
         border_touching = _touches_border(contour, self.input_size, _BORDER_MARGIN)
         if border_touching:

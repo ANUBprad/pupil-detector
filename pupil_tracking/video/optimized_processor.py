@@ -126,7 +126,7 @@ class VideoPreprocessor:
             min_reflection_area=10,
             inpaint_radius=3,
             detect_red_highlights=True,
-            red_threshold_offset=20,
+            red_threshold_offset=25,
         )
 
         # Temporal reflection filter for blinking lights
@@ -182,12 +182,15 @@ class VideoPreprocessor:
 
         out = image
 
-        # A5: Remove suction ring markers first (~1-2ms)
+        # A5: Light suction ring marker removal (skip diagnostics for speed)
         if self._ring_masker is not None:
-            out, _ = self._ring_masker.remove(out)
+            try:
+                out, _ = self._ring_masker.remove(out)
+            except Exception:
+                pass
 
         # A3: Remove specular reflections (~0.3ms)
-        out, _ = self._reflection_remover.remove(out)
+        out, _ = self._reflection_remover.remove(out, roi_mask=None)
 
         # Temporal filtering for blinking lights (new)
         # This identifies transient bright spots (blinking red lights)
@@ -1441,6 +1444,17 @@ class OptimizedVideoProcessor:
                     and raw_dict.get("ring_center_x") is not None
                     else "limbus"
                 )
+                
+                # Conditional Limbus Shrink
+                # The ML model naturally tends to overestimate the iris/limbus
+                # boundary in pre-docked images. Apply a conservative shrink
+                # to help keep the detected limbus inside the expected eye ROI.
+                if raw_dict.get("image_category") == "pre_docked" and raw_dict.get("limbus_detected", False):
+                    shrink = 0.93
+                    for key in ["limbus_radius", "limbus_r", "limbus_major", "limbus_minor"]:
+                        if raw_dict.get(key) is not None:
+                            raw_dict[key] = float(raw_dict[key]) * shrink
+
                 eye_result = None
             raw_dict["quality_check_skipped"] = quality_skipped
 

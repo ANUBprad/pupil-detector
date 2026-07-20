@@ -51,7 +51,7 @@ def export(model_path: str, resolution: int = 320, output_path: str = None, veri
             "input": {0: "batch", 2: "height", 3: "width"},
             "output": {0: "batch", 2: "height", 3: "width"},
         },
-        opset_version=17,
+        opset_version=18,
         do_constant_folding=True,
     )
 
