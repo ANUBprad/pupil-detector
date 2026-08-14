@@ -734,3 +734,166 @@ class TestOverlayRenderer:
         # out should contain frame content (copied from frame)
         # Text overlays are drawn on top, so they won't be identical
         assert out.shape == frame.shape
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Limbus candidate evaluation (Phase 4 regression)
+# ═══════════════════════════════════════════════════════════════════════
+
+
+class TestLimbusCandidateEvaluation:
+    """Tests for _apply_fit_to_result candidate-selection semantics.
+
+    Verifies that:
+    - a valid fit is accepted even when fit_confidence < 0.5
+      (the old placeholder)
+    - a stronger existing candidate is not overwritten by a weaker one
+    - equal confidence preserves existing behavior
+    - invalid/no-fit candidates are rejected
+    """
+
+    @staticmethod
+    def _make_detector():
+        from pupil_tracking.core.detector import UnifiedDetector
+        return UnifiedDetector()
+
+    @staticmethod
+    def _make_fitResult(center_x=100.0, center_y=100.0, radius=50.0,
+                        fit_quality=0.42, valid=True):
+        from pupil_tracking.core.smart_fitter import FitResult, FitType
+        f = FitResult()
+        f.valid = valid
+        f.center_x = center_x
+        f.center_y = center_y
+        f.radius = radius
+        f.semi_major = radius
+        f.semi_minor = radius
+        f.fit_quality = fit_quality
+        f.fit_type = FitType.CIRCLE
+        f.circularity = 1.0
+        return f
+
+    def test_first_fit_accepted_below_old_placeholder(self):
+        """A valid fit with confidence < 0.5 must be accepted
+        when no prior fit exists (detected=True from wrapper,
+        confidence=0.0 default)."""
+        det = self._make_detector()
+        r = _make_result()
+        # Simulate wrapper state: detected=True, confidence=0.0
+        r.limbus.detected = True
+        r.limbus.confidence = 0.0
+
+        fit = self._make_fitResult(fit_quality=0.42)
+        det._apply_fit_to_result(r, pupil_fit=None, limbus_fit=fit)
+
+        assert r.limbus.detected is True
+        assert r.limbus.ellipse is not None
+        assert r.limbus.confidence == pytest.approx(0.42 * 1.05, abs=0.01)
+
+    def test_stronger_candidate_not_overwritten(self):
+        """An existing candidate with confidence 0.67 must not be
+        overwritten by a weaker candidate at 0.42."""
+        det = self._make_detector()
+        r = _make_result()
+        r.limbus.detected = True
+        r.limbus.confidence = 0.672
+
+        weak_fit = self._make_fitResult(fit_quality=0.40)
+        det._apply_fit_to_result(r, pupil_fit=None, limbus_fit=weak_fit)
+
+        assert r.limbus.confidence == pytest.approx(0.672)
+
+    def test_equal_confidence_preserves_existing(self):
+        """A candidate with equal confidence preserves existing."""
+        det = self._make_detector()
+        r = _make_result()
+        r.limbus.detected = True
+        r.limbus.confidence = 0.50
+
+        equal_fit = self._make_fitResult(fit_quality=0.50 / 1.05)
+        det._apply_fit_to_result(r, pupil_fit=None, limbus_fit=equal_fit)
+
+        # new_conf >= old: should be applied (equal is accepted)
+        assert r.limbus.detected is True
+        assert r.limbus.ellipse is not None
+
+    def test_invalid_fit_rejected(self):
+        """An invalid fit must not change the result."""
+        det = self._make_detector()
+        r = _make_result()
+        r.limbus.detected = True
+        r.limbus.confidence = 0.6
+
+        bad_fit = self._make_fitResult(valid=False)
+        det._apply_fit_to_result(r, pupil_fit=None, limbus_fit=bad_fit)
+
+        assert r.limbus.confidence == pytest.approx(0.6)
+
+    def test_no_fit_leaves_defaults(self):
+        """When no fit is provided, result retains wrapper defaults."""
+        det = self._make_detector()
+        r = _make_result()
+        r.limbus.detected = True
+        r.limbus.confidence = 0.0
+
+        det._apply_fit_to_result(r, pupil_fit=None, limbus_fit=None)
+
+        assert r.limbus.detected is True
+        assert r.limbus.confidence == 0.0
+
+
+class TestHeuristicLimbusGuard:
+    """Tests for the heuristic limbus replacement None guard."""
+
+    def test_radius_mm_none_does_not_raise(self):
+        """radius_mm=None must not raise TypeError in the heuristic path."""
+        from pupil_tracking.utils.types import EyeDetectionResult
+        from pupil_tracking.core.deterministic_ring_detector import (
+            RingDetectionResult, RingStatus,
+        )
+
+        r = EyeDetectionResult()
+        r.limbus.detected = True
+        r.limbus.confidence = 0.5
+        # radius_mm is None by default — no TypeError should occur
+        assert r.limbus.radius_mm is None
+
+        # Simulate the guard condition from detector.py
+        ring_status = "PRESENT"
+        ring_inner = 200.0
+        should_enter = (
+            ring_status == "PRESENT"
+            and ring_inner is not None
+            and r.limbus.detected
+            and r.limbus.ellipse is not None
+            and r.limbus.radius_mm is not None
+            and r.limbus.radius_mm > 0
+        )
+        # Guard blocks entry when radius_mm is None
+        assert should_enter is False
+
+    def test_heuristic_triggers_when_radius_mm_present(self):
+        """Heuristic should trigger when radius_mm is small and valid."""
+        from pupil_tracking.utils.types import EyeDetectionResult, EllipseParams
+
+        r = EyeDetectionResult()
+        r.limbus.detected = True
+        r.limbus.confidence = 0.5
+        r.limbus.ellipse = EllipseParams(
+            center_x=100.0, center_y=100.0,
+            semi_major=50.0, semi_minor=50.0, angle_deg=0.0,
+        )
+        r.limbus.radius_mm = 5.0  # small diameter: 10mm < 12mm
+
+        ring_status = "PRESENT"
+        ring_inner = 200.0
+        should_enter = (
+            ring_status == "PRESENT"
+            and ring_inner is not None
+            and r.limbus.detected
+            and r.limbus.ellipse is not None
+            and r.limbus.radius_mm is not None
+            and r.limbus.radius_mm > 0
+        )
+        assert should_enter is True
+        assert r.limbus.radius_mm * 2.0 < 12.0

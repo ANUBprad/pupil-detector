@@ -643,7 +643,9 @@ class UnifiedDetector:
                 getattr(result, "ring_status", "pre_docked") == "PRESENT"
                 and getattr(result, "ring_inner_radius", None) is not None
                 and result.limbus.detected
+                and result.limbus.ellipse is not None
                 and result.limbus.radius_mm is not None
+                and result.limbus.radius_mm > 0
             ):
                 limbus_dia_mm = result.limbus.radius_mm * 2.0
                 if limbus_dia_mm < 12.0:
@@ -670,8 +672,8 @@ class UnifiedDetector:
                             result.limbus.radius_mm = ep.radius * self._calibration.mm_per_px
                             result.limbus.center_mm = self._calibration.point_px_to_mm((ep.center_x, ep.center_y))
                             self.logger.debug("Heuristic limbus replaced from ring_inner (%.1f px)", ring_inner_px)
-        except Exception:
-            pass
+        except Exception as e:
+            self.logger.debug("Heuristic limbus replacement failed: %s", e)
 
         # -- Step 8: Corneal centre + offset ---------------------------
         result.corneal_center = self.corneal_calc.calculate(
@@ -2266,16 +2268,18 @@ class _ONNXEngineWrapper:
 
         result._raw_mask = raw_mask
 
-        # Set initial confidence from mask quality
+        # Set initial detection state from mask quality.
+        # Confidence is NOT pre-filled here: it will be set by
+        # _apply_fit_to_result() after SmartContourFitter evaluates
+        # the candidate.  Setting an initial placeholder (e.g. 0.5)
+        # would block valid fits whose fit_confidence < 0.5.
         pupil_pixels = (pupil_mask > 127).sum()
         iris_pixels = (iris_mask > 127).sum()
 
         if pupil_pixels > 100:
             result.pupil.detected = True
-            result.pupil.confidence = 0.5  # Will be refined by SmartFitter
         if iris_pixels > 100:
             result.limbus.detected = True
-            result.limbus.confidence = 0.5
 
         return result
 
