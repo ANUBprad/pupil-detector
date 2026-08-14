@@ -392,6 +392,89 @@ class CornealCenterCalculator:
 
         return result
 
+    def blend_from_available(
+        self,
+        result: "EyeDetectionResult",
+        ring_center: Optional[Tuple[float, float]] = None,
+        ring_confidence: float = 0.0,
+        ring_present: bool = False,
+    ) -> None:
+        """Blend available centres into a single corneal centre.
+
+        Collects pupil, limbus, and (optionally) ring centres, then
+        computes a confidence-weighted average.  Sets
+        ``corneal_center`` and ``corneal_reference_source`` on *result*
+        in-place.
+
+        Parameters
+        ----------
+        result : EyeDetectionResult
+            Detection result containing pupil/limbus detections.
+        ring_center : tuple, optional
+            Ring centre ``(x, y)`` in pixels.
+        ring_confidence : float
+            Confidence for ring detection.
+        ring_present : bool
+            Whether a valid ring detection is available.
+        """
+        pupil = result.pupil
+        limbus = result.limbus
+
+        if pupil.ellipse is None:
+            result.corneal_center.valid = False
+            return
+
+        points: list = []
+        weights: list = []
+
+        points.append(
+            (pupil.ellipse.center_x, pupil.ellipse.center_y, "pupil")
+        )
+        weights.append(max(pupil.confidence, 1e-3))
+
+        if limbus.detected and limbus.ellipse is not None:
+            points.append(
+                (limbus.ellipse.center_x, limbus.ellipse.center_y, "limbus")
+            )
+            weights.append(max(limbus.confidence, 1e-3))
+
+        if ring_present and ring_center is not None:
+            points.append(
+                (ring_center[0], ring_center[1], "ring")
+            )
+            weights.append(max(ring_confidence, 1e-3))
+
+        total_w = sum(weights)
+        cx = sum(pt[0] * w for pt, w in zip(points, weights)) / total_w
+        cy = sum(pt[1] * w for pt, w in zip(points, weights)) / total_w
+
+        ox = pupil.ellipse.center_x - cx
+        oy = pupil.ellipse.center_y - cy
+        mag_px = math.hypot(ox, oy)
+
+        cc = result.corneal_center
+        cc.valid = True
+        cc.center_px = (cx, cy)
+        cc.offset_px = (ox, oy)
+        cc.offset_magnitude_px = mag_px
+        cc.offset_angle_deg = math.degrees(math.atan2(oy, ox))
+        cc.confidence = min(pupil.confidence, 1e-3)
+        for i in range(1, len(weights)):
+            cc.confidence = min(cc.confidence, weights[i])
+        cc.confidence = float(np.clip(cc.confidence, 0.0, 1.0))
+
+        result.corneal_reference_source = "+".join(
+            name for _, _, name in points
+        )
+
+        cal = result.calibration
+        if cal is not None and cal.calibrated:
+            cc.center_mm = cal.point_px_to_mm((cx, cy))
+            dx_mm = ox * cal.mm_per_px
+            dy_mm = oy * cal.mm_per_px
+            cc.offset_mm = (dx_mm, dy_mm)
+            cc.offset_magnitude_mm = math.hypot(dx_mm, dy_mm)
+
     def reset(self) -> None:
         """Reset calculator state.
         
@@ -399,3 +482,73 @@ class CornealCenterCalculator:
         for API compatibility with previous versions.
         """
         pass
+
+
+# ════════════════════════════════════════════════════════════════
+# Standalone blending function (flat-dict export paths)
+# ════════════════════════════════════════════════════════════════
+
+def blend_corneal_center_from_points(
+    pupil_center: Tuple[float, float],
+    pupil_confidence: float,
+    limbus_center: Optional[Tuple[float, float]] = None,
+    limbus_confidence: float = 0.0,
+    ring_center: Optional[Tuple[float, float]] = None,
+    ring_confidence: float = 0.0,
+) -> Dict[str, Any]:
+    """Blend available centres into a corneal centre (flat-dict API).
+
+    Confidence-weighted average of available pupil, limbus, and ring
+    centres.  Used by ``gui_data_bridge`` for dict-based export paths.
+
+    Parameters
+    ----------
+    pupil_center : tuple
+        Pupil centre ``(x, y)`` in pixels.
+    pupil_confidence : float
+        Confidence for pupil detection.
+    limbus_center : tuple, optional
+        Limbus centre ``(x, y)`` in pixels.
+    limbus_confidence : float
+        Confidence for limbus detection.
+    ring_center : tuple, optional
+        Ring centre ``(x, y)`` in pixels.
+    ring_confidence : float
+        Confidence for ring detection.
+
+    Returns
+    -------
+    dict
+        ``center_px``, ``offset_magnitude_px``, ``offset_angle_deg``,
+        ``corneal_reference_source``.
+    """
+    points: list = []
+    weights: list = []
+
+    points.append((pupil_center[0], pupil_center[1], "pupil"))
+    weights.append(max(pupil_confidence, 1e-3))
+
+    if limbus_center is not None:
+        points.append((limbus_center[0], limbus_center[1], "limbus"))
+        weights.append(max(limbus_confidence, 1e-3))
+
+    if ring_center is not None:
+        points.append((ring_center[0], ring_center[1], "ring"))
+        weights.append(max(ring_confidence, 1e-3))
+
+    total_w = sum(weights)
+    cx = sum(pt[0] * w for pt, w in zip(points, weights)) / total_w
+    cy = sum(pt[1] * w for pt, w in zip(points, weights)) / total_w
+
+    ox = pupil_center[0] - cx
+    oy = pupil_center[1] - cy
+    mag_px = math.hypot(ox, oy)
+
+    return {
+        "center_px": (cx, cy),
+        "offset_magnitude_px": mag_px,
+        "offset_angle_deg": math.degrees(math.atan2(oy, ox)),
+        "corneal_reference_source": "+".join(
+            name for _, _, name in points
+        ),
+    }
