@@ -112,6 +112,9 @@ class AuditLogger:
     def debug(self, msg: str, *args: Any) -> None:
         self._py.debug(msg, *args)
 
+    def exception(self, msg: str, *args: Any, **kwargs: Any) -> None:
+        self._py.exception(msg, *args, **kwargs)
+
     # ── lifecycle ───────────────────────────────────────────────
 
     def close(self) -> None:

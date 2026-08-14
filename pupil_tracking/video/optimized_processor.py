@@ -511,7 +511,7 @@ class OptimizedVideoProcessor:
         self,
         model_path: str = "models/best_model.pth",
         device: str = "auto",
-        input_size: int = 320,  # A2: 192 â†’ 320 (accuracy-first)
+        input_size: int = 320,  # A2: 192 â†' 320 (accuracy-first)
         half_precision: bool = True,
         use_compile: bool = True,
         enable_auto_roi: bool = True,
@@ -528,6 +528,7 @@ class OptimizedVideoProcessor:
         adaptive_quality: bool = True,
         adaptive_stable_frames: int = 4,
         adaptive_quality_skip_stride: int = 1,
+        fast_engine=None,
     ):
         """
         Parameters
@@ -541,6 +542,10 @@ class OptimizedVideoProcessor:
             Skip bilateral filter in preprocessing (S4).
         skip_quality_check : bool
             Disable blur/brightness checks.
+        fast_engine : optional
+            Pre-built FastInference instance. When supplied, the processor
+            reuses it instead of creating a new one, avoiding redundant
+            model loads.
         """
         logger.info("Initialising ACCURACY-FIRST OptimizedVideoProcessor ...")
 
@@ -575,7 +580,10 @@ class OptimizedVideoProcessor:
         self._fast_engine = None
         self._ring_detector = RingDetector(classifier_path=None)
 
-        if _HAS_FAST:
+        if fast_engine is not None:
+            self._fast_engine = fast_engine
+            logger.info("Using supplied FastInference instance (single-scale, fast)")
+        elif _HAS_FAST:
             try:
                 self._fast_engine = FastInference(
                     model_path=model_path,

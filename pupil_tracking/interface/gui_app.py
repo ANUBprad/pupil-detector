@@ -2794,6 +2794,7 @@ class PupilTrackingGUI:
                 fast_mode=True,
                 skip_quality_check=False,
                 batch_size=self._runtime_profile.recommended_batch_size,
+                fast_engine=engine,
             )
             self._apply_manual_roi_to_processor()
             self._apply_manual_ring_to_processor()
@@ -3131,6 +3132,7 @@ class PupilTrackingGUI:
                 fast_mode=True,
                 skip_quality_check=False,
                 batch_size=self._runtime_profile.recommended_batch_size,
+                fast_engine=engine,
             )
             self._apply_manual_roi_to_processor()
             self._apply_manual_ring_to_processor()
