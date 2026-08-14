@@ -1355,8 +1355,44 @@ class UnifiedDetector:
         limbus_fit = self._fitter.fit(
             iris_mask, 
             gray_image, 
-            pupil_hint=pupil_fit
+            pupil_hint=pupil_fit,
+            ring_radius=ring_result.ring_inner_radius if is_docked else None,
+            ring_center=ring_result.ring_center if is_docked else None,
         )
+
+        # When the fitted limbus is too large relative to the ring opening,
+        # the iris mask has bled into the sclera.  Refit with a tighter ROI
+        # to recover the true limbus boundary.  Only refit when the initial
+        # fit quality is low (indicating a poor contour), protecting good
+        # existing fits from being degraded.
+        if (
+            is_docked
+            and limbus_fit is not None
+            and limbus_fit.valid
+            and limbus_fit.fit_quality is not None
+            and limbus_fit.fit_quality < 0.50
+            and ring_result.ring_inner_radius is not None
+            and ring_result.ring_inner_radius > 0
+            and limbus_fit.radius > ring_result.ring_inner_radius * 0.70
+        ):
+            iris_mask_tight = self._apply_ring_roi(
+                ((mask == 2) | (mask == 1)).astype(np.uint8),
+                ring_result,
+                margin_frac=0.75,
+            )
+            limbus_fit_tight = self._fitter.fit(
+                iris_mask_tight,
+                gray_image,
+                pupil_hint=pupil_fit,
+                ring_radius=ring_result.ring_inner_radius if is_docked else None,
+                ring_center=ring_result.ring_center if is_docked else None,
+            )
+            if (
+                limbus_fit_tight is not None
+                and limbus_fit_tight.valid
+                and limbus_fit_tight.radius < limbus_fit.radius
+            ):
+                limbus_fit = limbus_fit_tight
 
         # Validate pre-docking limbus concentricity and radius ratio
         if (

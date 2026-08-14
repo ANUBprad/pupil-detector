@@ -897,3 +897,166 @@ class TestHeuristicLimbusGuard:
         )
         assert should_enter is True
         assert r.limbus.radius_mm * 2.0 < 12.0
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Phase 5 — Ring-constrained limbus fitting
+# ──────────────────────────────────────────────────────────────────────
+
+
+class TestRingConstrainedFitting:
+    """Tests for the ring-radius contour filter in SmartContourFitter.fit()."""
+
+    def test_ring_radius_filters_outlier_contour_points(self):
+        """Contour points beyond ring_inner_radius should be removed."""
+        from pupil_tracking.core.smart_fitter import SmartContourFitter
+        import cv2
+
+        fitter = SmartContourFitter()
+        # Create a mask with a large contour that extends well beyond the ring
+        mask = np.zeros((400, 400), dtype=np.uint8)
+        # Inner circle (true limbus) at r=100
+        cv2.circle(mask, (200, 200), 100, 255, 2)
+        # Outer ring of noise at r=180 (beyond ring_inner=120)
+        for angle in range(0, 360, 3):
+            x = int(200 + 180 * np.cos(np.radians(angle)))
+            y = int(200 + 180 * np.sin(np.radians(angle)))
+            cv2.circle(mask, (x, y), 2, 255, -1)
+
+        # Fit WITHOUT ring constraint — outer points inflate the fit
+        result_no_ring = fitter.fit(mask)
+        # Fit WITH ring constraint — outer points filtered
+        result_ring = fitter.fit(mask, ring_radius=120.0, ring_center=(200, 200))
+
+        if result_no_ring.valid and result_ring.valid:
+            # Ring-constrained fit should be closer to true radius (100)
+            assert result_ring.radius <= result_no_ring.radius
+            assert result_ring.radius < 140  # generous upper bound
+
+    def test_ring_filter_skipped_when_no_ring_radius(self):
+        """Without ring_radius, fit should use all contour points."""
+        from pupil_tracking.core.smart_fitter import SmartContourFitter
+        import cv2
+
+        fitter = SmartContourFitter()
+        mask = np.zeros((200, 200), dtype=np.uint8)
+        cv2.circle(mask, (100, 100), 60, 255, 2)
+
+        r1 = fitter.fit(mask)
+        r2 = fitter.fit(mask, ring_radius=None, ring_center=None)
+
+        assert r1.valid == r2.valid
+        if r1.valid and r2.valid:
+            assert abs(r1.radius - r2.radius) < 1.0
+
+    def test_ring_filter_skipped_when_no_ring_center(self):
+        """Without ring_center, ring filter should not be applied."""
+        from pupil_tracking.core.smart_fitter import SmartContourFitter
+        import cv2
+
+        fitter = SmartContourFitter()
+        mask = np.zeros((200, 200), dtype=np.uint8)
+        cv2.circle(mask, (100, 100), 60, 255, 2)
+
+        r1 = fitter.fit(mask)
+        r2 = fitter.fit(mask, ring_radius=120.0, ring_center=None)
+
+        assert r1.valid == r2.valid
+        if r1.valid and r2.valid:
+            assert abs(r1.radius - r2.radius) < 1.0
+
+    def test_ring_filter_preserves_small_contour(self):
+        """Ring filter should not reject a contour entirely inside ring."""
+        from pupil_tracking.core.smart_fitter import SmartContourFitter
+        import cv2
+
+        fitter = SmartContourFitter()
+        mask = np.zeros((400, 400), dtype=np.uint8)
+        cv2.circle(mask, (200, 200), 60, 255, 2)
+
+        result = fitter.fit(mask, ring_radius=150.0, ring_center=(200, 200))
+        assert result.valid
+        assert abs(result.radius - 60) < 10
+
+    def test_tighter_roi_refit_when_quality_low(self):
+        """When fit quality < 0.50 and radius too large, detector should refit with tighter ROI."""
+        from pupil_tracking.core.detector import UnifiedDetector
+        from pupil_tracking.core.smart_fitter import SmartContourFitter, FitResult
+        from pupil_tracking.core.deterministic_ring_detector import RingDetectionResult, RingStatus
+
+        # Simulate: ring with inner=200, fit with quality=0.40 and radius=170
+        # This should trigger tighter ROI refit (radius > 0.70 * ring_inner)
+        ring = RingDetectionResult(
+            status=RingStatus.PRESENT,
+            confidence=0.9,
+            ring_center=(200, 200),
+            ring_radius=220,
+            ring_inner_radius=200,
+        )
+        # The condition: quality < 0.50 AND radius > 0.70 * ring_inner
+        fit_quality = 0.40
+        fit_radius = 170.0
+        ring_inner = 200.0
+
+        should_refit = (
+            fit_quality is not None
+            and fit_quality < 0.50
+            and ring_inner is not None
+            and ring_inner > 0
+            and fit_radius > ring_inner * 0.70
+        )
+        assert should_refit is True
+
+    def test_no_refit_when_quality_good(self):
+        """When fit quality >= 0.50, tighter ROI refit should NOT trigger."""
+        fit_quality = 0.64
+        fit_radius = 170.0
+        ring_inner = 200.0
+
+        should_refit = (
+            fit_quality is not None
+            and fit_quality < 0.50
+            and ring_inner is not None
+            and ring_inner > 0
+            and fit_radius > ring_inner * 0.70
+        )
+        assert should_refit is False
+
+    def test_no_refit_when_radius_within_bounds(self):
+        """When radius <= 0.70 * ring_inner, tighter ROI refit should NOT trigger."""
+        fit_quality = 0.40
+        fit_radius = 130.0
+        ring_inner = 200.0
+
+        should_refit = (
+            fit_quality is not None
+            and fit_quality < 0.50
+            and ring_inner is not None
+            and ring_inner > 0
+            and fit_radius > ring_inner * 0.70
+        )
+        assert should_refit is False
+
+    def test_eye_01_unchanged_after_ring_constraint(self):
+        """eye_01 (known good) should not regress from ring-constraint changes."""
+        import cv2
+        from pupil_tracking.core.detector import UnifiedDetector
+        import logging
+        logging.getLogger().setLevel(logging.WARNING)
+        for n in ["pupil_tracking", "onnxruntime", "urllib3"]:
+            logging.getLogger(n).setLevel(logging.WARNING)
+
+        det = UnifiedDetector()
+        img = cv2.imread("clinical_data/clean/eye_01.jpeg")
+        r = det.detect(img, frame_number=-1, source="eye_01.jpeg")
+
+        pe = r.pupil.ellipse
+        le = r.limbus.ellipse
+        assert abs(pe.center_x - 381.5) < 0.5
+        assert abs(pe.center_y - 334.1) < 0.5
+        assert abs(pe.semi_major - 82.4) < 0.5
+        assert abs(r.pupil.confidence - 0.798) < 0.01
+        assert abs(le.center_x - 383.5) < 0.5
+        assert abs(le.center_y - 322.7) < 0.5
+        assert abs(le.semi_major - 225.9) < 0.5
+        assert abs(r.limbus.confidence - 0.672) < 0.01

@@ -774,6 +774,8 @@ class SmartContourFitter:
         binary_mask: np.ndarray,
         gray_image: Optional[np.ndarray] = None,
         pupil_hint: Optional["FitResult"] = None,
+        ring_radius: Optional[float] = None,
+        ring_center: Optional[tuple] = None,
     ) -> FitResult:
         """
         Fit the largest contour in a binary mask.
@@ -784,6 +786,12 @@ class SmartContourFitter:
             pupil_hint: optional FitResult of the pupil, used to filter out
                 limbus points that bleed into the sclera by removing points
                 that are too far from the median radius.
+            ring_radius: optional ring inner radius.  When provided, contour
+                points beyond this distance from the ring centre are discarded
+                before fitting, preventing sclera-bleeding from inflating the
+                limbus estimate.
+            ring_center: (x, y) ring centre.  Required when ring_radius is
+                given; used as the spatial reference for filtering.
 
         Returns:
             FitResult with all measurements
@@ -822,6 +830,17 @@ class SmartContourFitter:
             # Apply filter if we keep enough points
             if np.sum(mask_pts) >= max(self.min_contour_points, int(len(pts) * 0.25)):
                 pts = pts[mask_pts]
+
+        # Ring-based filtering: discard contour points beyond ring inner radius.
+        # The ML iris mask commonly extends into the sclera, inflating the
+        # contour.  The ring inner radius is a reliable anatomical upper bound
+        # for the limbus boundary.
+        if ring_radius is not None and ring_center is not None and ring_radius > 0:
+            rcx, rcy = ring_center
+            dists = np.hypot(pts[:, 0] - rcx, pts[:, 1] - rcy)
+            ring_mask = dists <= ring_radius
+            if np.sum(ring_mask) >= max(self.min_contour_points, int(len(pts) * 0.25)):
+                pts = pts[ring_mask]
 
         if self.subpixel_refine and gray_image is not None:
             sp = self._subpixel_cfg
