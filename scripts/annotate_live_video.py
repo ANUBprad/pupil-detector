@@ -1105,6 +1105,7 @@ class LiveAnnotationApp:
         auto_save_interval=10,
         max_display_w=0,
         max_display_h=0,
+        corrected_output=None,
     ):
         self.video_source = video_source
         self.output_dir = Path(output_dir)
@@ -1126,6 +1127,23 @@ class LiveAnnotationApp:
         )
 
         self.store = AnnotationStore(self.ann_path)
+
+        self.corrected_store = None
+        if corrected_output is not None:
+            cp = Path(corrected_output)
+            if cp.resolve() == self.ann_path.resolve():
+                raise ValueError(
+                    f"corrected-output must differ from "
+                    f"source annotation path: {self.ann_path}"
+                )
+            cp.parent.mkdir(parents=True, exist_ok=True)
+            self.corrected_store = AnnotationStore(cp)
+            for k, v in self.store.annotations.items():
+                self.corrected_store.annotations[k] = v
+            print(
+                f"[Corrected output] {cp} "
+                f"({len(self.corrected_store)} annotations loaded)"
+            )
         self.edge_proc = EdgeProcessor()
         self.mode = AnnotationMode.IDLE
         self.fit_constraint = FitConstraint.ELLIPSE
@@ -1446,13 +1464,22 @@ class LiveAnnotationApp:
             annotated_at=datetime.now().isoformat(),
         )
         self.store.add(name, ann)
+        if self.corrected_store is not None:
+            self.corrected_store.add(name, ann)
         self.unsaved_count += 1
         self._gen_mask(name, ann)
 
         if self.unsaved_count >= self.auto_save_interval:
-            self.store.save()
+            save_target = (
+                self.corrected_store
+                if self.corrected_store is not None
+                else self.store
+            )
+            save_target.save()
             self.unsaved_count = 0
-            self._flash(f"Auto-saved! Total: {len(self.store)}")
+            self._flash(
+                f"Auto-saved! Total: {len(save_target)}"
+            )
 
         self.current_pupil = None
         self.current_limbus = None
@@ -2012,10 +2039,15 @@ class LiveAnnotationApp:
             return True
 
         if c == "s":
-            self.store.save()
+            save_target = (
+                self.corrected_store
+                if self.corrected_store is not None
+                else self.store
+            )
+            save_target.save()
             self.unsaved_count = 0
             self._flash(
-                f"Saved {len(self.store)} annotations"
+                f"Saved {len(save_target)} annotations"
             )
             return True
 
@@ -2115,7 +2147,12 @@ class LiveAnnotationApp:
         return True
 
     def _trigger_retrain(self):
-        self.store.save()
+        save_target = (
+            self.corrected_store
+            if self.corrected_store is not None
+            else self.store
+        )
+        save_target.save()
         n = len(self.store)
         if n < 10:
             self._flash(
@@ -2205,7 +2242,12 @@ class LiveAnnotationApp:
             print("\n[Interrupted]")
         finally:
             if self.unsaved_count > 0:
-                self.store.save()
+                save_target = (
+                    self.corrected_store
+                    if self.corrected_store is not None
+                    else self.store
+                )
+                save_target.save()
             self.cap.release()
             cv2.destroyAllWindows()
             print(
@@ -2487,6 +2529,16 @@ def main():
     a.add_argument("--auto-save", type=int, default=10)
     a.add_argument("--max-width", type=int, default=0)
     a.add_argument("--max-height", type=int, default=0)
+    a.add_argument(
+        "--corrected-output",
+        default=None,
+        help=(
+            "Path for corrected annotations JSON. "
+            "When set, saves edited annotations to this "
+            "file instead of overwriting the source. "
+            "The source annotation file is never modified."
+        ),
+    )
 
     m = sub.add_parser("generate-masks")
     m.add_argument(
@@ -2540,6 +2592,7 @@ def main():
             auto_save_interval=args.auto_save,
             max_display_w=args.max_width,
             max_display_h=args.max_height,
+            corrected_output=args.corrected_output,
         ).run()
     elif args.cmd == "generate-masks":
         generate_masks_from_annotations(
