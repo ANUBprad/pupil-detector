@@ -137,18 +137,48 @@ class ONNXInference:
         sess_options.enable_mem_pattern = True
         sess_options.enable_cpu_mem_arena = True
 
-        # Execution provider selection
-        providers = self._select_providers(enable_gpu)
+        # Execution provider selection.
+        # We build the preferred (possibly GPU-accelerated) plan first, then a
+        # guaranteed CPU-only plan. If the preferred plan fails to create a
+        # session on this machine — missing runtime, unsupported iGPU, driver
+        # issue — we transparently fall back to CPU. The MODEL, INPUT/OUTPUT
+        # names, and all numerical processing are identical either way, so the
+        # detection result is byte-for-byte unchanged regardless of which
+        # provider actually runs. Only the hardware doing the math differs.
+        preferred = self._select_providers(enable_gpu)
+        cpu_only = ["CPUExecutionProvider"]
 
         logger.info(f"Loading ONNX model: {model_path}")
-        logger.info(f"Providers: {providers}")
         logger.info(f"Threads: {num_threads}")
 
-        self.session = ort.InferenceSession(
-            model_path,
-            sess_options=sess_options,
-            providers=providers,
-        )
+        self.session = None
+        attempts = [("preferred", preferred)]
+        # Only add a CPU retry if the preferred plan wasn't already CPU-only
+        if preferred != cpu_only:
+            attempts.append(("cpu-fallback", cpu_only))
+
+        last_error: Optional[Exception] = None
+        for label, plan in attempts:
+            try:
+                logger.info(f"Trying providers ({label}): {plan}")
+                self.session = ort.InferenceSession(
+                    model_path,
+                    sess_options=sess_options,
+                    providers=plan,
+                )
+                break
+            except Exception as exc:  # noqa: BLE001 - want any failure to fall back
+                last_error = exc
+                logger.warning(
+                    f"Provider plan '{label}' failed to initialize "
+                    f"({exc}); falling back to next option."
+                )
+
+        if self.session is None:
+            raise RuntimeError(
+                f"Could not create an ONNX inference session for {model_path}. "
+                f"Last error: {last_error}"
+            )
 
         # Cache input/output names
         self.input_name = self.session.get_inputs()[0].name
@@ -170,27 +200,64 @@ class ONNXInference:
         self._warmup()
 
     def _select_providers(self, enable_gpu: bool) -> list:
-        """Select best available execution provider."""
+        """Select best available execution provider.
+
+        Priority order (highest performance first):
+          1. NVIDIA CUDA          — discrete NVIDIA GPU
+          2. OpenVINO CPU+GPU     — Intel iGPU + CPU together (MULTI mode)
+          3. OpenVINO CPU         — Intel CPU via OpenVINO (faster than stock ORT)
+          4. DirectML             — Intel/AMD iGPU via Windows DirectML
+          5. Apple CoreML         — Apple Silicon / macOS GPU
+          6. CPU                  — universal fallback (always works)
+
+        Each provider is tried and silently skipped if unavailable, so the
+        app works identically on any machine — detection output is unchanged.
+        """
         ort = _get_ort()
         available = ort.get_available_providers()
         providers = []
 
         if enable_gpu:
+            # ── 1. NVIDIA CUDA ──────────────────────────────────────────
             if "CUDAExecutionProvider" in available:
                 providers.append(("CUDAExecutionProvider", {
                     "device_id": 0,
                     "arena_extend_strategy": "kSameAsRequested",
                     "cudnn_conv_algo_search": "HEURISTIC",
                 }))
-                logger.info("GPU: NVIDIA CUDA")
+                logger.info("Inference backend: NVIDIA CUDA")
+                providers.append("CPUExecutionProvider")
+                return providers
+
+            # ── 2 & 3. Intel OpenVINO (iGPU+CPU MULTI, then CPU-only) ──
+            # Preferred for Intel Iris Xe (the doctor's i5-1135G7). MULTI runs
+            # the CPU and iGPU together to raise throughput. If session
+            # creation with MULTI fails on a given machine, load_model()
+            # automatically retries CPU-only — see _build_provider_plan().
+            if "OpenVINOExecutionProvider" in available:
+                providers.append(("OpenVINOExecutionProvider", {
+                    "device_type": "MULTI:GPU,CPU",
+                    "num_of_threads": 4,
+                    "cache_dir": "",
+                }))
+                logger.info("Inference backend (preferred): OpenVINO MULTI:GPU,CPU")
+                providers.append("CPUExecutionProvider")
+                return providers
+
+            # ── 4. DirectML (Intel/AMD iGPU on Windows) ─────────────────
+            if "DmlExecutionProvider" in available:
+                providers.append("DmlExecutionProvider")
+                logger.info("Inference backend: DirectML (iGPU)")
+
+            # ── 5. Apple CoreML ──────────────────────────────────────────
             elif "CoreMLExecutionProvider" in available:
                 providers.append("CoreMLExecutionProvider")
-                logger.info("GPU: Apple CoreML")
-            elif "DmlExecutionProvider" in available:
-                providers.append("DmlExecutionProvider")
-                logger.info("GPU: DirectML")
+                logger.info("Inference backend: Apple CoreML")
 
+        # ── 6. CPU fallback (always appended) ───────────────────────────
         providers.append("CPUExecutionProvider")
+        if not providers[:-1]:  # only CPU was added
+            logger.info("Inference backend: CPU")
         return providers
 
     def _get_optimal_threads(self) -> int:

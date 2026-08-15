@@ -306,12 +306,22 @@ class LimbusDetection:
     radius_mm: Optional[float] = None
     contour_points: Optional[Any] = None
 
+    # White-to-White (WTW) corneal diameter metrics
+    wtw_horizontal_mm: Optional[float] = None
+    wtw_vertical_mm: Optional[float] = None
+    wtw_mean_mm: Optional[float] = None
+    wtw_astigmatism_mm: Optional[float] = None
+    is_wtw_measured: bool = False
+    wtw_validity_status: str = "UNAVAILABLE"
+
     def to_dict(self) -> Dict[str, Any]:
         d: Dict[str, Any] = {
             "detected": self.detected,
             "confidence": _sf(self.confidence),
             "quality": self.quality.value,
             "method": self.method.value,
+            "is_wtw_measured": self.is_wtw_measured,
+            "wtw_validity_status": self.wtw_validity_status,
         }
         if self.ellipse is not None:
             d["ellipse"] = self.ellipse.to_dict()
@@ -324,7 +334,16 @@ class LimbusDetection:
             d["center_mm"] = _st(self.center_mm)
         if self.radius_mm is not None:
             d["radius_mm"] = _sf(self.radius_mm)
+        if self.wtw_horizontal_mm is not None:
+            d["wtw_horizontal_mm"] = _sf(self.wtw_horizontal_mm)
+        if self.wtw_vertical_mm is not None:
+            d["wtw_vertical_mm"] = _sf(self.wtw_vertical_mm)
+        if self.wtw_mean_mm is not None:
+            d["wtw_mean_mm"] = _sf(self.wtw_mean_mm)
+        if self.wtw_astigmatism_mm is not None:
+            d["wtw_astigmatism_mm"] = _sf(self.wtw_astigmatism_mm)
         return d
+
 
 
 @dataclass
@@ -373,9 +392,13 @@ class CalibrationInfo:
     px_per_mm: float = 1.0
     mm_per_px: float = 1.0
     source: str = "none"
+    method: str = "anatomical"  # "anatomical" | "fixed_manual" | "ring_reflection"
     reference_diameter_mm: float = 0.0
     reference_diameter_px: float = 0.0
     confidence: float = 0.0
+    corneal_diameter_assumed_mm: Optional[float] = None
+    mm_per_px_uncertainty: float = 0.0
+    px_per_mm_std: float = 0.0
 
     def px_to_mm(self, px: float) -> float:
         return px * self.mm_per_px if self.calibrated else 0.0
@@ -398,10 +421,13 @@ class CalibrationInfo:
             "px_per_mm": _sf(self.px_per_mm),
             "mm_per_px": _sf(self.mm_per_px),
             "source": self.source,
+            "method": self.method,
             "reference_diameter_mm": _sf(self.reference_diameter_mm),
             "reference_diameter_px": _sf(self.reference_diameter_px),
             "confidence": _sf(self.confidence),
+            "corneal_diameter_assumed_mm": _sf(self.corneal_diameter_assumed_mm) if self.corneal_diameter_assumed_mm is not None else None,
         }
+
 
 
 @dataclass

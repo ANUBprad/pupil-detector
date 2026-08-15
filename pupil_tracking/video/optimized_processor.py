@@ -246,9 +246,9 @@ class FrameQualityChecker:
 
     def __init__(
         self,
-        blur_threshold: float = 20.0,
-        brightness_low: float = 15.0,
-        brightness_high: float = 250.0,
+        blur_threshold: float = 8.0,
+        brightness_low: float = 8.0,
+        brightness_high: float = 252.0,
         skip_check: bool = False,
     ):
         self.blur_thresh = blur_threshold

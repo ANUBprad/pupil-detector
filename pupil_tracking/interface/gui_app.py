@@ -248,6 +248,25 @@ class PupilTrackingGUI:
         self._grayscale_mode_var = tk.StringVar(value="off")
         # ══════════════════════════════════════════════════════════
 
+        self._pupil_fill_alpha_var = tk.IntVar(value=0)
+        self._limbus_fill_alpha_var = tk.IntVar(value=0)
+
+        # ── Modular Calibration Settings ──
+        init_mode = getattr(self.cfg.calibration, "mode", "ANATOMICAL_ANCHOR") if hasattr(self.cfg, "calibration") else "ANATOMICAL_ANCHOR"
+        self._calibration_mode_var = tk.StringVar(value=init_mode)
+        init_manual_px = float(getattr(self.cfg.calibration, "manual_px_per_mm", 44.5) or 44.5) if hasattr(self.cfg, "calibration") else 44.5
+        self._fixed_scale_var = tk.DoubleVar(value=init_manual_px)
+        init_corneal = float(getattr(self.cfg.calibration, "corneal_diameter_mm", 11.5) or 11.5) if hasattr(self.cfg, "calibration") else 11.5
+        self._corneal_ref_mm_var = tk.DoubleVar(value=init_corneal)
+        init_ring = float(getattr(self.cfg.calibration, "suction_ring_diameter_mm", 9.4) or 9.4) if hasattr(self.cfg, "calibration") else 9.4
+        self._ring_ref_mm_var = tk.DoubleVar(value=init_ring)
+
+        # ── Interactive 2-Point Ruler Tool State ──
+        self._ruler_calibration_active: bool = False
+        self._ruler_points: list[tuple[float, float]] = []
+        self._ruler_known_dist_mm_var = tk.DoubleVar(value=10.0)
+
+
     # ================================================================
     # Detector Initialisation
     # ================================================================
@@ -429,11 +448,14 @@ class PupilTrackingGUI:
         if not path:
             return
 
-        initial_frame = self._prepare_recording_frame(
+        # Prepare a frame that includes the measurements panel so the
+        # recording captures the full on-screen layout (image + table).
+        display_image = self._prepare_recording_frame(
             self._current_image,
             self._current_result,
         )
-        h, w = initial_frame.shape[:2]
+        composite = self._compose_capture_frame(display_image, self._current_result)
+        h, w = composite.shape[:2]
 
         target_fps = 30.0
         if self._video_cap is not None:
@@ -543,10 +565,25 @@ class PupilTrackingGUI:
 
     def _write_frame_to_recorder(self, frame: np.ndarray) -> None:
         """Write a frame to the recorder (non-blocking)."""
+        # If recording, ensure we write the full composed UI (image +
+        # measurements panel). The provided `frame` may be just the
+        # image area, so construct the composite using current state.
+        try:
+            if self._recorder.is_recording and self._current_image is not None:
+                display_image = self._prepare_recording_frame(
+                    self._current_image, self._current_result
+                )
+                composite = self._compose_capture_frame(display_image, self._current_result)
+                self._recorder.write(composite)
+                return
+        except Exception:
+            # Fall back to naive write if composition fails
+            pass
+
         self._recorder.write(frame)
 
     def _prepare_recording_frame(self, frame: np.ndarray, result: Any) -> np.ndarray:
-        """Prepare a composite frame with image + full measurements."""
+        """Prepare a frame that mirrors the current on-screen display for recording."""
         mode = self._grayscale_mode_var.get()
         if mode == "off":
             image = frame.copy()
@@ -554,12 +591,14 @@ class PupilTrackingGUI:
             image = self._convert_display_frame(frame.copy())
 
         if result is not None and self._show_overlay.get():
-            image = self._draw_overlay(image, result)
+            self._draw_overlay_scaled(image, result, 1.0)
 
         self._draw_manual_roi_overlay(image, 1.0)
         self._draw_manual_ring_overlay(image, 1.0)
+        if self._show_debug_overlay.get():
+            self._draw_debug_overlay(image, 1.0)
 
-        return self._compose_capture_frame(image, result)
+        return image
 
     @staticmethod
     def _hex_to_bgr(value: str) -> Tuple[int, int, int]:
@@ -648,6 +687,44 @@ class PupilTrackingGUI:
             ),
         ]
 
+    # Map of non-ASCII glyphs used in the live Tk UI to ASCII equivalents
+    # that OpenCV's cv2.putText (Hershey fonts) CAN render. Without this,
+    # cv2.putText draws '?' for any codepoint outside its ASCII glyph table,
+    # which is why the recording showed "155.5??" etc. The live UI is
+    # unaffected — this only touches the composited/recorded panel.
+    _CAPTURE_GLYPH_MAP = {
+        "°": " deg",   # ° degree
+        "×": "x",      # × multiplication
+        "—": "-",      # — em dash
+        "–": "-",      # – en dash
+        "→": "->",     # → arrow
+        "µ": "u",      # µ micro
+        "≥": ">=",     # ≥
+        "≤": "<=",     # ≤
+        "±": "+/-",    # ±
+        "•": "*",      # • bullet
+        "⚠": "!",      # ⚠ warning
+        "⚡": "",       # ⚡ lightning
+        "✓": "OK",     # ✓ check
+        "✗": "X",      # ✗ cross
+    }
+
+    def _ascii_for_capture(self, text: str) -> str:
+        """Sanitize a UI string so cv2.putText renders it without '?' glyphs.
+
+        Replaces known symbols with ASCII equivalents, then drops any
+        remaining non-ASCII codepoint so nothing renders as a question mark.
+        """
+        if not text:
+            return text
+        for uni, ascii_rep in self._CAPTURE_GLYPH_MAP.items():
+            if uni in text:
+                text = text.replace(uni, ascii_rep)
+        # Drop any leftover non-ASCII so OpenCV never emits '?'
+        if any(ord(ch) > 127 for ch in text):
+            text = text.encode("ascii", "ignore").decode("ascii")
+        return text
+
     def _render_measurements_capture(self, height: int, width: int) -> np.ndarray:
         panel = np.full((height, width, 3), self._hex_to_bgr(self._colors.BG_SECONDARY), dtype=np.uint8)
         cv2.rectangle(
@@ -700,8 +777,8 @@ class PupilTrackingGUI:
             x1 = min(width - pad, x0 + summary_w)
             cv2.rectangle(panel, (x0, y0), (x1, y0 + summary_box_h), card_bg, -1)
             cv2.rectangle(panel, (x0, y0), (x1, y0 + summary_box_h), self._hex_to_bgr(self._colors.BORDER), 1)
-            cv2.putText(panel, label, (x0 + 10, y0 + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.42, fg_secondary, 1, cv2.LINE_AA)
-            cv2.putText(panel, value or "---", (x0 + 10, y0 + 46), cv2.FONT_HERSHEY_SIMPLEX, 0.58, color, 2, cv2.LINE_AA)
+            cv2.putText(panel, self._ascii_for_capture(label), (x0 + 10, y0 + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.42, fg_secondary, 1, cv2.LINE_AA)
+            cv2.putText(panel, self._ascii_for_capture(value or "---"), (x0 + 10, y0 + 46), cv2.FONT_HERSHEY_SIMPLEX, 0.58, color, 2, cv2.LINE_AA)
 
         sections = self._measurement_capture_sections()
         left_sections = sections[:2]
@@ -716,13 +793,13 @@ class PupilTrackingGUI:
                     box_h = max(40, height - pad - y)
                 cv2.rectangle(panel, (x_start, y), (x_start + col_w, min(height - pad, y + box_h)), card_bg, -1)
                 cv2.rectangle(panel, (x_start, y), (x_start + col_w, min(height - pad, y + box_h)), self._hex_to_bgr(self._colors.BORDER), 1)
-                cv2.putText(panel, title, (x_start + 10, y + 24), cv2.FONT_HERSHEY_SIMPLEX, title_font, accent, 2, cv2.LINE_AA)
+                cv2.putText(panel, self._ascii_for_capture(title), (x_start + 10, y + 24), cv2.FONT_HERSHEY_SIMPLEX, title_font, accent, 2, cv2.LINE_AA)
                 row_y = y + 48
                 for label, value in rows:
                     if row_y > y + box_h - 8:
                         break
-                    clean_label = label.replace("_", " ").title()
-                    clean_value = (value or "---").replace("\n", " ")
+                    clean_label = self._ascii_for_capture(label.replace("_", " ").title())
+                    clean_value = self._ascii_for_capture((value or "---").replace("\n", " "))
                     if len(clean_value) > 32:
                         clean_value = clean_value[:29] + "..."
                     cv2.putText(panel, clean_label, (x_start + 10, row_y), cv2.FONT_HERSHEY_SIMPLEX, body_font, fg_secondary, 1, cv2.LINE_AA)
@@ -995,16 +1072,16 @@ class PupilTrackingGUI:
         ).pack(side=tk.LEFT, padx=(4, 8))
 
         ttk.Separator(toolbar, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=5)
-        # ══════════════════════════════════════════════════════════
-        # END GRAYSCALE GUI 7
-        # ══════════════════════════════════════════════════════════
-
+        ttk.Button(toolbar, text="📏 Scale Wizard", command=self._open_calibration_wizard).pack(
+            side=tk.LEFT, padx=2
+        )
         ttk.Button(toolbar, text="Export CSV", command=self._export_csv).pack(
             side=tk.LEFT, padx=2
         )
         ttk.Button(toolbar, text="Snapshot", command=self._export_snapshot).pack(
             side=tk.LEFT, padx=2
         )
+
 
         self._quality_label = ttk.Label(
             toolbar,
@@ -1339,6 +1416,108 @@ class PupilTrackingGUI:
             side=tk.LEFT
         )
 
+        cal_lf = ttk.LabelFrame(sf, text="Calibration & Physical Units", padding=8)
+        cal_lf.pack(fill=tk.X, padx=4, pady=4)
+
+        ttk.Label(
+            cal_lf,
+            text="Select physical scale derivation method:",
+            style="Muted.TLabel",
+            justify=tk.LEFT,
+        ).pack(anchor=tk.W, pady=(0, 4))
+
+        for mode_val, mode_text in [
+            ("ANATOMICAL_ANCHOR", "Anatomical Anchor (Cornea ≈ 11.5 mm)"),
+            ("FIXED_PIXEL_SCALE", "Fixed Pixel Scale (Manual / External Target)"),
+            ("RING_REFLECTION", "Ring Reflection (Purkinje / Placido Ring)"),
+        ]:
+            ttk.Radiobutton(
+                cal_lf,
+                text=mode_text,
+                variable=self._calibration_mode_var,
+                value=mode_val,
+                command=lambda: self._schedule_live_settings_apply("calibration"),
+            ).pack(anchor=tk.W, padx=(8, 0), pady=1)
+
+        px_mm_row = ttk.Frame(cal_lf)
+        px_mm_row.pack(fill=tk.X, pady=2)
+        ttk.Label(px_mm_row, text="Fixed Scale (px/mm):", font=sn, width=sw).pack(side=tk.LEFT)
+        ttk.Spinbox(
+            px_mm_row,
+            from_=1.0,
+            to=500.0,
+            increment=0.5,
+            textvariable=self._fixed_scale_var,
+            width=8,
+            font=sn,
+        ).pack(side=tk.LEFT, padx=4)
+
+        cornea_row = ttk.Frame(cal_lf)
+        cornea_row.pack(fill=tk.X, pady=2)
+        ttk.Label(cornea_row, text="Assumed Cornea (mm):", font=sn, width=sw).pack(side=tk.LEFT)
+        ttk.Spinbox(
+            cornea_row,
+            from_=8.0,
+            to=15.0,
+            increment=0.1,
+            textvariable=self._corneal_ref_mm_var,
+            width=8,
+            font=sn,
+        ).pack(side=tk.LEFT, padx=4)
+
+        ring_row = ttk.Frame(cal_lf)
+        ring_row.pack(fill=tk.X, pady=2)
+        ttk.Label(ring_row, text="Ref Ring Dia (mm):", font=sn, width=sw).pack(side=tk.LEFT)
+        ttk.Spinbox(
+            ring_row,
+            from_=5.0,
+            to=20.0,
+            increment=0.1,
+            textvariable=self._ring_ref_mm_var,
+            width=8,
+            font=sn,
+        ).pack(side=tk.LEFT, padx=4)
+
+        ttk.Button(
+            cal_lf,
+            text="⚡ Open Calibration & WTW Wizard…",
+            command=self._open_calibration_wizard,
+        ).pack(anchor=tk.W, pady=(6, 2))
+
+        fill_lf = ttk.LabelFrame(sf, text="Circle Fill Shading", padding=8)
+
+        fill_lf.pack(fill=tk.X, padx=4, pady=4)
+
+        ttk.Label(
+            fill_lf,
+            text="Fill the pupil (green) and limbus (blue) circles.\n0 = no fill, 100 = fully coloured.",
+            style="Muted.TLabel",
+            justify=tk.LEFT,
+        ).pack(anchor=tk.W, pady=(0, 6))
+
+        for label_text, var, disp_attr in [
+            ("Pupil (green) %:", self._pupil_fill_alpha_var, "_pupil_fill_display"),
+            ("Limbus (blue) %:", self._limbus_fill_alpha_var, "_limbus_fill_display"),
+        ]:
+            disp_var = tk.StringVar(value="0")
+            setattr(self, disp_attr, disp_var)
+            row = ttk.Frame(fill_lf)
+            row.pack(fill=tk.X, pady=2)
+            ttk.Label(row, text=label_text, font=sn, width=sw).pack(side=tk.LEFT)
+            _v = var  # capture for lambda
+            _d = disp_var
+            ttk.Scale(
+                row,
+                from_=0,
+                to=100,
+                variable=_v,
+                command=lambda v, d=_d: (
+                    d.set(str(int(float(v)))),
+                    self._refresh_display(),
+                ),
+            ).pack(side=tk.LEFT, fill=tk.X, expand=True, padx=4)
+            ttk.Label(row, textvariable=disp_var, font=sn, width=4).pack(side=tk.LEFT)
+
         a_lf = ttk.LabelFrame(sf, text="Actions", padding=8)
         a_lf.pack(fill=tk.X, padx=4, pady=4)
 
@@ -1536,7 +1715,18 @@ class PupilTrackingGUI:
         self._cv_vars["scale_mm"] = add_row(calib_frame, "mm/px:")
         self._cv_vars["reference"] = add_row(calib_frame, "Reference:")
 
-        proc_frame = add_card(cards_outer, "PROCESSING", "ProcHeader.TLabel", 2, 0, 2)
+        wtw_frame = add_card(
+            cards_outer, "CORNEAL DIMENSIONS (WTW)", "LimbusHeader.TLabel", 2, 0, 2
+        )
+        self._wtw_vars: Dict[str, tk.StringVar] = {}
+        self._wtw_vars["horizontal"] = add_row(wtw_frame, "Horizontal WTW:")
+        self._wtw_vars["vertical"] = add_row(wtw_frame, "Vertical WTW:")
+        self._wtw_vars["mean"] = add_row(wtw_frame, "Mean WTW:")
+        self._wtw_vars["astigmatism"] = add_row(wtw_frame, "Astigmatism:")
+        self._wtw_vars["status"] = add_row(wtw_frame, "Status:")
+        self._wtw_vars["mode"] = add_row(wtw_frame, "Scale Standard:")
+
+        proc_frame = add_card(cards_outer, "PROCESSING", "ProcHeader.TLabel", 3, 0, 2)
         self._proc_time_var = add_row(proc_frame, "Proc. Time:")
         self._latency_var = add_row(proc_frame, "Latency:")
         self._latency_avg_var = add_row(proc_frame, "Latency Avg:")
@@ -1551,6 +1741,7 @@ class PupilTrackingGUI:
         # GRAYSCALE GUI 9 of 12 — Grayscale info in measurements
         # ══════════════════════════════════════════════════════════
         self._gray_mode_var_display = add_row(proc_frame, "Grayscale:")
+
 
     def _build_details_panel(self, parent: ttk.Frame) -> None:
         c = self._colors
@@ -1635,6 +1826,10 @@ class PupilTrackingGUI:
             (self._roi_cache_var, "roi"),
             (self._kalman_process_var, "tracking"),
             (self._kalman_measure_var, "tracking"),
+            (self._calibration_mode_var, "calibration"),
+            (self._fixed_scale_var, "calibration"),
+            (self._corneal_ref_mm_var, "calibration"),
+            (self._ring_ref_mm_var, "calibration"),
         )
         for var, reason in callbacks:
             var.trace_add(
@@ -1679,6 +1874,25 @@ class PupilTrackingGUI:
                 self._kalman_measure_var.get()
             )
 
+        # Apply calibration settings
+        if "calibration" in reasons or not restart_required:
+            cal_mode = self._calibration_mode_var.get()
+            manual_px = float(self._fixed_scale_var.get())
+            corneal_mm = float(self._corneal_ref_mm_var.get())
+            ring_mm = float(self._ring_ref_mm_var.get())
+            if hasattr(self.cfg, "calibration"):
+                self.cfg.calibration.mode = cal_mode
+                self.cfg.calibration.manual_px_per_mm = manual_px
+                self.cfg.calibration.corneal_diameter_mm = corneal_mm
+                self.cfg.calibration.suction_ring_diameter_mm = ring_mm
+            if self._detector is not None:
+                self._detector.set_calibration_mode(
+                    mode=cal_mode,
+                    manual_px_per_mm=manual_px,
+                    corneal_diameter_mm=corneal_mm,
+                    ring_diameter_mm=ring_mm,
+                )
+
         if self._tracker is not None and not self._video_running:
             self._tracker = EyeKalmanTracker(config=self.cfg)
 
@@ -1702,6 +1916,7 @@ class PupilTrackingGUI:
                 ),
             )
             return
+
         if (
             reasons.intersection({"pipeline", "engine", "resolution"})
             and not self._video_running
@@ -2023,12 +2238,16 @@ class PupilTrackingGUI:
         self._refresh_display()
 
     def _on_canvas_press(self, event: Any) -> None:
+        if getattr(self, "_ruler_calibration_active", False):
+            self._handle_ruler_canvas_click(event)
+            return
         if self._ring_edit_active:
             self._handle_ring_canvas_press(event)
             return
         if not self._roi_edit_active:
             return
         point = self._canvas_to_image_point(event.x, event.y)
+
         if point is None or self._current_image is None:
             return
         if self._roi_preview is None:
@@ -2200,53 +2419,221 @@ class PupilTrackingGUI:
         self._refresh_display()
 
     def _cancel_active_selection(self, event: Any = None) -> None:
+        if getattr(self, "_ruler_calibration_active", False):
+            self._cancel_ruler_calibration(event)
+            return
         if self._ring_edit_active:
             self._cancel_ring_selection(event)
             return
         self._cancel_roi_selection(event)
 
-    def _cancel_roi_selection(self, event: Any = None) -> None:
-        if not self._roi_edit_active:
-            return
-        self._roi_preview = None
-        self._roi_drag_mode = None
-        self._roi_drag_offset = (0.0, 0.0)
-        self._roi_edit_active = False
+    def _cancel_ruler_calibration(self, event: Any = None) -> None:
+        self._ruler_calibration_active = False
+        self._ruler_points.clear()
         self._canvas.configure(cursor="crosshair")
-        if hasattr(self, "_roi_btn"):
-            self._roi_btn.config(text="Set ROI")
-        if self._roi_original_before_edit is not None:
-            self._manual_roi = dict(self._roi_original_before_edit)
-            self._roi_status_var.set(
-                f"Manual ROI: On ({int(round(self._manual_roi['radius']))} px)"
-            )
-            self._status_var.set("ROI edit cancelled")
-        else:
-            self._roi_status_var.set("Manual ROI: Off")
-            self._status_var.set("ROI edit cancelled")
-        self._roi_original_before_edit = None
+        self._status_var.set("Ruler calibration cancelled")
         self._refresh_display()
 
-    def _cancel_ring_selection(self, event: Any = None) -> None:
-        if not self._ring_edit_active:
-            return
-        self._ring_preview = None
-        self._ring_drag_mode = None
-        self._ring_drag_offset = (0.0, 0.0)
-        self._ring_edit_active = False
-        self._canvas.configure(cursor="crosshair")
-        if hasattr(self, "_ring_btn"):
-            self._ring_btn.config(text="Set Ring")
-        if self._ring_original_before_edit is not None:
-            self._manual_ring = dict(self._ring_original_before_edit)
-            self._ring_status_var.set(
-                f"Manual Ring: Locked ({int(round(self._manual_ring['radius'] * 2.0))} px)"
-            )
-        else:
-            self._ring_status_var.set("Manual Ring: Off")
-        self._status_var.set("Ring edit cancelled")
-        self._ring_original_before_edit = None
+    def _start_ruler_calibration(self, known_dist_mm: float = 10.0) -> None:
+        self._ruler_calibration_active = True
+        self._ruler_points.clear()
+        self._ruler_known_dist_mm_var.set(known_dist_mm)
+        self._canvas.configure(cursor="tcross")
+        self._status_var.set(
+            f"Ruler Calibration: Click Point 1 on image (known span: {known_dist_mm:.1f} mm)"
+        )
         self._refresh_display()
+
+    def _handle_ruler_canvas_click(self, event: Any) -> None:
+        pt = self._canvas_to_image_point(event.x, event.y)
+        if pt is None:
+            return
+        self._ruler_points.append(pt)
+        if len(self._ruler_points) == 1:
+            self._status_var.set(
+                f"Ruler point 1 set at ({pt[0]:.1f}, {pt[1]:.1f}) px. Now click Point 2..."
+            )
+            self._refresh_display()
+        elif len(self._ruler_points) >= 2:
+            p1 = self._ruler_points[0]
+            p2 = self._ruler_points[1]
+            dist_px = math.hypot(p2[0] - p1[0], p2[1] - p1[1])
+            known_mm = float(self._ruler_known_dist_mm_var.get())
+            if known_mm <= 0:
+                known_mm = 10.0
+            if dist_px < 2.0:
+                self._status_var.set("Selected points too close together (<2px). Click 2 distinct points.")
+                self._ruler_points.clear()
+                self._refresh_display()
+                return
+
+            from pupil_tracking.calibration.spatial_calibration import calculate_ruler_scale
+            px_per_mm, mm_per_px = calculate_ruler_scale(p1, p2, known_mm)
+            self._fixed_scale_var.set(round(px_per_mm, 2))
+            self._calibration_mode_var.set("FIXED_PIXEL_SCALE")
+            self._schedule_live_settings_apply("calibration")
+            self._ruler_calibration_active = False
+            self._canvas.configure(cursor="crosshair")
+            msg = f"Ruler Calibrated: {px_per_mm:.2f} px/mm ({dist_px:.1f} px = {known_mm:.1f} mm)"
+            self._status_var.set(msg)
+            self._refresh_display()
+            messagebox.showinfo(
+                "Ruler Calibration Applied",
+                f"Calibration Successful!\n\nScale: {px_per_mm:.2f} px/mm ({mm_per_px:.4f} mm/px)\n"
+                f"Measured Span: {dist_px:.1f} px = {known_mm:.1f} mm\n"
+                f"Mode: Fixed Pixel Scale (Active)",
+            )
+
+    def _open_calibration_wizard(self) -> None:
+        """Open a modern, comprehensive Calibration & Corneal Sizing Wizard dialog."""
+        wizard = tk.Toplevel(self.root)
+        wizard.title("Scale & Corneal Sizing (WTW) Calibration Wizard")
+        wizard.geometry("540x580")
+        wizard.resizable(False, False)
+        wizard.transient(self.root)
+        wizard.grab_set()
+
+        c = self._colors
+        wizard.configure(bg=c.BG_PRIMARY)
+
+        # Header
+        header = ttk.Frame(wizard, padding=16)
+        header.pack(fill=tk.X)
+        ttk.Label(
+            header,
+            text="Optical Scale & WTW Calibration",
+            font=("Segoe UI", 14, "bold"),
+            foreground=c.FG_PRIMARY,
+        ).pack(anchor=tk.W)
+        ttk.Label(
+            header,
+            text="Establish an accurate pixel-to-millimeter ratio for genuine patient-specific\nWhite-to-White corneal diameter measurements.",
+            style="Muted.TLabel",
+            justify=tk.LEFT,
+        ).pack(anchor=tk.W, pady=(4, 0))
+
+        # Main cards container
+        container = ttk.Frame(wizard, padding=(16, 0, 16, 16))
+        container.pack(fill=tk.BOTH, expand=True)
+
+        # Method 1: Interactive 2-Point Ruler Card
+        m1 = ttk.LabelFrame(container, text="Method 1: Interactive 2-Point Ruler Tool", padding=10)
+        m1.pack(fill=tk.X, pady=4)
+        ttk.Label(
+            m1,
+            text="Click two points on an image with a known physical distance\n(e.g., surgical marker, ruler, or target grid).",
+            style="Muted.TLabel",
+            justify=tk.LEFT,
+        ).pack(anchor=tk.W, pady=(0, 6))
+
+        ruler_row = ttk.Frame(m1)
+        ruler_row.pack(fill=tk.X, pady=2)
+        ttk.Label(ruler_row, text="Known Distance (mm):", width=20).pack(side=tk.LEFT)
+        known_mm_ent = ttk.Spinbox(
+            ruler_row,
+            from_=0.5,
+            to=100.0,
+            increment=0.5,
+            textvariable=self._ruler_known_dist_mm_var,
+            width=8,
+        )
+        known_mm_ent.pack(side=tk.LEFT, padx=4)
+
+        def _start_ruler():
+            wizard.destroy()
+            self._start_ruler_calibration(self._ruler_known_dist_mm_var.get())
+
+        ttk.Button(
+            ruler_row,
+            text="🎯 Click 2 Points on Canvas",
+            command=_start_ruler,
+        ).pack(side=tk.LEFT, padx=8)
+
+        # Method 2: Direct Optical Scale Input
+        m2 = ttk.LabelFrame(container, text="Method 2: Direct Optical / Microscope Scale", padding=10)
+        m2.pack(fill=tk.X, pady=4)
+        ttk.Label(
+            m2,
+            text="Directly enter known magnification / scale factor in pixels per millimeter.",
+            style="Muted.TLabel",
+            justify=tk.LEFT,
+        ).pack(anchor=tk.W, pady=(0, 6))
+
+        scale_row = ttk.Frame(m2)
+        scale_row.pack(fill=tk.X, pady=2)
+        ttk.Label(scale_row, text="Fixed Scale (px/mm):", width=20).pack(side=tk.LEFT)
+        scale_ent = ttk.Spinbox(
+            scale_row,
+            from_=1.0,
+            to=500.0,
+            increment=0.5,
+            textvariable=self._fixed_scale_var,
+            width=8,
+        )
+        scale_ent.pack(side=tk.LEFT, padx=4)
+
+        def _apply_fixed():
+            self._calibration_mode_var.set("FIXED_PIXEL_SCALE")
+            self._schedule_live_settings_apply("calibration")
+            wizard.destroy()
+            messagebox.showinfo("Scale Set", f"Fixed optical scale set to {self._fixed_scale_var.get():.2f} px/mm.")
+
+        ttk.Button(scale_row, text="Apply Scale", command=_apply_fixed).pack(side=tk.LEFT, padx=8)
+
+        # Method 3: Ring Fiducial Reflection
+        m3 = ttk.LabelFrame(container, text="Method 3: Suction / Placido Ring Fiducial", padding=10)
+        m3.pack(fill=tk.X, pady=4)
+        ttk.Label(
+            m3,
+            text="Calibrate dynamically from a known surgical suction ring or Placido ring.",
+            style="Muted.TLabel",
+            justify=tk.LEFT,
+        ).pack(anchor=tk.W, pady=(0, 6))
+
+        ring_row = ttk.Frame(m3)
+        ring_row.pack(fill=tk.X, pady=2)
+        ttk.Label(ring_row, text="Ring Outer Dia (mm):", width=20).pack(side=tk.LEFT)
+        ring_ent = ttk.Spinbox(
+            ring_row,
+            from_=5.0,
+            to=25.0,
+            increment=0.1,
+            textvariable=self._ring_ref_mm_var,
+            width=8,
+        )
+        ring_ent.pack(side=tk.LEFT, padx=4)
+
+        def _apply_ring():
+            self._calibration_mode_var.set("RING_REFLECTION")
+            self._schedule_live_settings_apply("calibration")
+            wizard.destroy()
+            messagebox.showinfo("Ring Mode Set", f"Ring reflection calibration activated ({self._ring_ref_mm_var.get():.1f} mm standard).")
+
+        ttk.Button(ring_row, text="Apply Ring Mode", command=_apply_ring).pack(side=tk.LEFT, padx=8)
+
+        # Method 4: Anatomical Baseline Anchor
+        m4 = ttk.LabelFrame(container, text="Method 4: Anatomical Baseline Anchor (11.5 mm)", padding=10)
+        m4.pack(fill=tk.X, pady=4)
+        ttk.Label(
+            m4,
+            text="Assumes horizontal corneal diameter is 11.5 mm (not patient-specific).",
+            style="Muted.TLabel",
+            justify=tk.LEFT,
+        ).pack(anchor=tk.W, pady=(0, 6))
+
+        def _apply_anatomical():
+            self._calibration_mode_var.set("ANATOMICAL_ANCHOR")
+            self._schedule_live_settings_apply("calibration")
+            wizard.destroy()
+            messagebox.showinfo("Baseline Set", "Calibration set to 11.5 mm Anatomical Anchor.")
+
+        ttk.Button(m4, text="Reset to 11.5 mm Baseline Anchor", command=_apply_anatomical).pack(anchor=tk.W)
+
+        # Footer close button
+        btn_bar = ttk.Frame(wizard, padding=(16, 0, 16, 16))
+        btn_bar.pack(fill=tk.X)
+        ttk.Button(btn_bar, text="Close", command=wizard.destroy).pack(side=tk.RIGHT)
+
 
     def _canvas_to_image_point(
         self, canvas_x: float, canvas_y: float
@@ -2765,7 +3152,7 @@ class PupilTrackingGUI:
             # ══════════════════════════════════════════════════════════
             if self._recorder.is_recording:
                 annotated = self._prepare_recording_frame(frame, smoothed)
-                self._recorder.write(annotated)
+                self._write_frame_to_recorder(annotated)
             # ══════════════════════════════════════════════════════════
 
             now = time.monotonic()
@@ -2901,7 +3288,7 @@ class PupilTrackingGUI:
                     # ══════════════════════════════════════════════════════════
                     if self._recorder.is_recording:
                         annotated = self._prepare_recording_frame(frame, adapted)
-                        self._recorder.write(annotated)
+                        self._write_frame_to_recorder(annotated)
                     # ══════════════════════════════════════════════════════════
 
                     fps_counter += 1
@@ -3000,7 +3387,7 @@ class PupilTrackingGUI:
             # ══════════════════════════════════════════════════════════
             if self._recorder.is_recording:
                 annotated = self._prepare_recording_frame(frame, adapted)
-                self._recorder.write(annotated)
+                self._write_frame_to_recorder(annotated)
             # ══════════════════════════════════════════════════════════
 
             fps_counter += 1
@@ -3231,7 +3618,7 @@ class PupilTrackingGUI:
             # ══════════════════════════════════════════════════════════
             if self._recorder.is_recording:
                 annotated = self._prepare_recording_frame(frame, adapted)
-                self._recorder.write(annotated)
+                self._write_frame_to_recorder(annotated)
             # ══════════════════════════════════════════════════════════
 
             fps_counter += 1
@@ -3372,34 +3759,94 @@ class PupilTrackingGUI:
             eye_result.metadata.latency_ms = getattr(fr, "latency_ms", fr.processing_ms)
             return eye_result
 
-        if fr.limbus_axes is not None:
-            # Calibrate from the semi-major axis only (horizontal corneal
-            # diameter ≈ 11.5 mm).  This avoids the circular-reference
-            # problem where dia_mm = dia_px * (11.5 / dia_px) = 11.5 always.
-            limbus_semi_major_dia = float(
-                max(fr.limbus_axes)
-            )  # full major-axis diameter
-            px_per_mm = limbus_semi_major_dia / _CORNEAL_DIAMETER_MM
-            mm_per_px = 1.0 / px_per_mm if px_per_mm > 0 else 0.0
+        cal_mode = self._calibration_mode_var.get() if hasattr(self, "_calibration_mode_var") else "ANATOMICAL_ANCHOR"
+        corneal_mm = float(self._corneal_ref_mm_var.get() if hasattr(self, "_corneal_ref_mm_var") else _CORNEAL_DIAMETER_MM)
+        fixed_scale = float(self._fixed_scale_var.get() if hasattr(self, "_fixed_scale_var") else 44.5)
+        ring_ref_mm = float(self._ring_ref_mm_var.get() if hasattr(self, "_ring_ref_mm_var") else 9.4)
+
+        if cal_mode in ("FIXED_PIXEL_SCALE", "fixed_manual", "manual"):
+            px_per_mm = max(0.1, fixed_scale)
             cal = SimpleNamespace(
                 calibrated=True,
                 px_per_mm=px_per_mm,
-                mm_per_px=mm_per_px,
-                source="limbus_semi_major (optimised)",
-                reference_diameter_mm=_CORNEAL_DIAMETER_MM,
-                reference_diameter_px=limbus_semi_major_dia,
-                confidence=min(0.95, fr.confidence + 0.05),
-            )
-        else:
-            cal = SimpleNamespace(
-                calibrated=False,
-                px_per_mm=0.0,
-                mm_per_px=0.0,
-                source="none",
+                mm_per_px=1.0 / px_per_mm,
+                source="fixed_manual",
+                method="fixed_manual",
                 reference_diameter_mm=0.0,
                 reference_diameter_px=0.0,
-                confidence=0.0,
+                confidence=1.0,
+                corneal_diameter_assumed_mm=None,
             )
+        elif cal_mode == "RING_REFLECTION":
+            ring_radius = getattr(fr, "ring_radius", None)
+            if ring_radius is not None and ring_radius > 10:
+                dia_px = ring_radius * 2.0
+                px_per_mm = dia_px / ring_ref_mm
+                cal = SimpleNamespace(
+                    calibrated=True,
+                    px_per_mm=px_per_mm,
+                    mm_per_px=1.0 / px_per_mm,
+                    source=f"ring_reflection_{ring_ref_mm:.1f}mm",
+                    method="ring_reflection",
+                    reference_diameter_mm=ring_ref_mm,
+                    reference_diameter_px=dia_px,
+                    confidence=0.95,
+                    corneal_diameter_assumed_mm=None,
+                )
+            elif fr.limbus_axes is not None:
+                limbus_semi_major_dia = float(max(fr.limbus_axes))
+                px_per_mm = limbus_semi_major_dia / corneal_mm
+                cal = SimpleNamespace(
+                    calibrated=True,
+                    px_per_mm=px_per_mm,
+                    mm_per_px=1.0 / px_per_mm if px_per_mm > 0 else 0.0,
+                    source="limbus_semi_major (fallback)",
+                    method="anatomical",
+                    reference_diameter_mm=corneal_mm,
+                    reference_diameter_px=limbus_semi_major_dia,
+                    confidence=min(0.85, fr.confidence),
+                    corneal_diameter_assumed_mm=corneal_mm,
+                )
+            else:
+                cal = SimpleNamespace(
+                    calibrated=False,
+                    px_per_mm=0.0,
+                    mm_per_px=0.0,
+                    source="none",
+                    method="ring_reflection",
+                    reference_diameter_mm=0.0,
+                    reference_diameter_px=0.0,
+                    confidence=0.0,
+                    corneal_diameter_assumed_mm=None,
+                )
+        else:  # ANATOMICAL_ANCHOR
+            if fr.limbus_axes is not None:
+                limbus_semi_major_dia = float(max(fr.limbus_axes))
+                px_per_mm = limbus_semi_major_dia / corneal_mm
+                mm_per_px = 1.0 / px_per_mm if px_per_mm > 0 else 0.0
+                cal = SimpleNamespace(
+                    calibrated=True,
+                    px_per_mm=px_per_mm,
+                    mm_per_px=mm_per_px,
+                    source="limbus_semi_major (optimised)",
+                    method="anatomical",
+                    reference_diameter_mm=corneal_mm,
+                    reference_diameter_px=limbus_semi_major_dia,
+                    confidence=min(0.95, fr.confidence + 0.05),
+                    corneal_diameter_assumed_mm=corneal_mm,
+                )
+            else:
+                cal = SimpleNamespace(
+                    calibrated=False,
+                    px_per_mm=0.0,
+                    mm_per_px=0.0,
+                    source="none",
+                    method="anatomical",
+                    reference_diameter_mm=0.0,
+                    reference_diameter_px=0.0,
+                    confidence=0.0,
+                    corneal_diameter_assumed_mm=corneal_mm,
+                )
         _MAP = {
             "SURGICAL": "SURGICAL",
             "CLINICAL": "CLINICAL",
@@ -3582,44 +4029,93 @@ class PupilTrackingGUI:
                 "calibrated": cal.calibrated,
                 "mm_per_px": cal.mm_per_px,
                 "px_per_mm": cal.px_per_mm,
+                "source": getattr(cal, "source", "none"),
+                "method": getattr(cal, "method", "anatomical"),
+                "corneal_diameter_assumed_mm": getattr(cal, "corneal_diameter_assumed_mm", None),
             },
         }
         if fr.pupil_center is not None and fr.pupil_axes is not None:
             semi_a, semi_b = max(fr.pupil_axes) / 2.0, min(fr.pupil_axes) / 2.0
+            # Mean radius — matches EllipseParams.radius and the Measurements
+            # panel (which shows diameter = e.radius * 2). Using the mean (not
+            # semi-major) is what makes the exported mm value vary per frame
+            # instead of collapsing to the calibration constant.
+            mean_r = (semi_a + semi_b) / 2.0
+            mm = cal.mm_per_px if cal.calibrated else 0.0
             d["pupil"] = {
                 "detected": True,
                 "confidence": fr.confidence,
                 "fit_type": getattr(fr, "pupil_fit_type", None),
+                "radius_mm": (mean_r * mm) if cal.calibrated else None,
+                "center_mm": (
+                    (fr.pupil_center[0] * mm, fr.pupil_center[1] * mm)
+                    if cal.calibrated else None
+                ),
                 "ellipse": {
                     "center_x": fr.pupil_center[0],
                     "center_y": fr.pupil_center[1],
-                    "radius": semi_a,
+                    "radius": mean_r,
                     "semi_major": semi_a,
                     "semi_minor": semi_b,
-                    "semi_major_mm": semi_a * cal.mm_per_px if cal.calibrated else None,
-                    "semi_minor_mm": semi_b * cal.mm_per_px if cal.calibrated else None,
+                    "angle_deg": float(getattr(fr, "pupil_angle", 0.0) or 0.0),
+                    "diameter_mm": (mean_r * 2.0 * mm) if cal.calibrated else None,
+                    "semi_major_mm": (semi_a * mm) if cal.calibrated else None,
+                    "semi_minor_mm": (semi_b * mm) if cal.calibrated else None,
                 },
             }
         else:
             d["pupil"] = {"detected": False, "ellipse": {}}
         if fr.limbus_center is not None and fr.limbus_axes is not None:
             semi_a, semi_b = max(fr.limbus_axes) / 2.0, min(fr.limbus_axes) / 2.0
+            mean_r = (semi_a + semi_b) / 2.0
+            mm = cal.mm_per_px if cal.calibrated else 0.0
+            wtw_h = (2.0 * semi_a * mm) if cal.calibrated else None
+            wtw_v = (2.0 * semi_b * mm) if cal.calibrated else None
+            wtw_m = (mean_r * 2.0 * mm) if cal.calibrated else None
+            wtw_astig = (abs(wtw_h - wtw_v)) if (wtw_h is not None and wtw_v is not None) else None
+            is_wtw_m = bool(cal.calibrated and getattr(cal, "method", "anatomical") != "anatomical")
+            if not cal.calibrated:
+                wtw_status = "UNAVAILABLE"
+            elif not is_wtw_m:
+                wtw_status = "ANCHORED_BASELINE"
+            else:
+                wtw_status = "VALID_CLINICAL_RANGE" if (wtw_m is not None and 9.5 <= wtw_m <= 13.5) else "OUT_OF_BOUNDS_WARNING"
+
             d["limbus"] = {
                 "detected": True,
                 "confidence": min(0.95, fr.confidence + 0.05),
                 "fit_type": getattr(fr, "limbus_fit_type", None),
+                "radius_mm": (mean_r * mm) if cal.calibrated else None,
+                "center_mm": (
+                    (fr.limbus_center[0] * mm, fr.limbus_center[1] * mm)
+                    if cal.calibrated else None
+                ),
+                "wtw_horizontal_mm": wtw_h,
+                "wtw_vertical_mm": wtw_v,
+                "wtw_mean_mm": wtw_m,
+                "wtw_astigmatism_mm": wtw_astig,
+                "is_wtw_measured": is_wtw_m,
+                "wtw_validity_status": wtw_status,
                 "ellipse": {
                     "center_x": fr.limbus_center[0],
                     "center_y": fr.limbus_center[1],
-                    "radius": semi_a,
+                    "radius": mean_r,
                     "semi_major": semi_a,
                     "semi_minor": semi_b,
-                    "semi_major_mm": semi_a * cal.mm_per_px if cal.calibrated else None,
-                    "semi_minor_mm": semi_b * cal.mm_per_px if cal.calibrated else None,
+                    "angle_deg": float(getattr(fr, "limbus_angle", 0.0) or 0.0),
+                    "diameter_mm": (mean_r * 2.0 * mm) if cal.calibrated else None,
+                    "semi_major_mm": (semi_a * mm) if cal.calibrated else None,
+                    "semi_minor_mm": (semi_b * mm) if cal.calibrated else None,
                 },
             }
         else:
-            d["limbus"] = {"detected": False, "ellipse": {}}
+            d["limbus"] = {
+                "detected": False,
+                "ellipse": {},
+                "is_wtw_measured": False,
+                "wtw_validity_status": "UNAVAILABLE",
+            }
+
         ring_center = getattr(fr, "ring_center", None)
         use_ring_reference = (
             getattr(fr, "ring_status", "unknown") == "ring_present"
@@ -4043,39 +4539,7 @@ class PupilTrackingGUI:
                         cv2.LINE_AA,
                     )
 
-        if (
-            self._show_pupil.get()
-            and result.pupil.detected
-            and result.pupil.ellipse is not None
-        ):
-            e_orig = result.pupil.ellipse
-            e = self._scale_ellipse(e_orig, scale)
-            pupil_color = (0, 255, 0)
-            ct = self._draw_structure(out, e, pupil_color)
-            if self._show_centers.get():
-                cv2.circle(out, ct, max(2, int(4 * scale)), pupil_color, -1)
-            if self._show_measurements.get():
-                dia_px = e_orig.radius * 2.0
-                label = f"D={dia_px:.0f}px"
-                if cal.calibrated:
-                    label += f" ({dia_px * cal.mm_per_px:.2f}mm)"
-                ft = getattr(e_orig, "fit_type", None) or getattr(
-                    result.pupil, "fit_type", None
-                )
-                if ft:
-                    label += f" [{ft}]"
-                font_scale = max(0.3, 0.45 * scale)
-                cv2.putText(
-                    out,
-                    label,
-                    (ct[0] + 10, ct[1] - 10),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    font_scale,
-                    pupil_color,
-                    1,
-                    cv2.LINE_AA,
-                )
-
+        # Draw limbus first (larger) so pupil renders on top
         if (
             self._show_limbus.get()
             and result.limbus.detected
@@ -4084,6 +4548,9 @@ class PupilTrackingGUI:
             e_orig = result.limbus.ellipse
             e = self._scale_ellipse(e_orig, scale)
             limbus_color = (255, 100, 0)
+            limbus_alpha = self._limbus_fill_alpha_var.get() / 100.0
+            if limbus_alpha > 0:
+                self._draw_filled_structure(out, e, limbus_color, limbus_alpha)
             ct = self._draw_structure(out, e, limbus_color)
             if self._show_centers.get():
                 cv2.circle(out, ct, max(2, int(4 * scale)), limbus_color, -1)
@@ -4108,6 +4575,43 @@ class PupilTrackingGUI:
                     cv2.FONT_HERSHEY_SIMPLEX,
                     font_scale,
                     limbus_color,
+                    1,
+                    cv2.LINE_AA,
+                )
+
+        # Draw pupil second so it always appears on top of the limbus fill
+        if (
+            self._show_pupil.get()
+            and result.pupil.detected
+            and result.pupil.ellipse is not None
+        ):
+            e_orig = result.pupil.ellipse
+            e = self._scale_ellipse(e_orig, scale)
+            pupil_color = (0, 255, 0)
+            pupil_alpha = self._pupil_fill_alpha_var.get() / 100.0
+            if pupil_alpha > 0:
+                self._draw_filled_structure(out, e, pupil_color, pupil_alpha)
+            ct = self._draw_structure(out, e, pupil_color)
+            if self._show_centers.get():
+                cv2.circle(out, ct, max(2, int(4 * scale)), pupil_color, -1)
+            if self._show_measurements.get():
+                dia_px = e_orig.radius * 2.0
+                label = f"D={dia_px:.0f}px"
+                if cal.calibrated:
+                    label += f" ({dia_px * cal.mm_per_px:.2f}mm)"
+                ft = getattr(e_orig, "fit_type", None) or getattr(
+                    result.pupil, "fit_type", None
+                )
+                if ft:
+                    label += f" [{ft}]"
+                font_scale = max(0.3, 0.45 * scale)
+                cv2.putText(
+                    out,
+                    label,
+                    (ct[0] + 10, ct[1] - 10),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    font_scale,
+                    pupil_color,
                     1,
                     cv2.LINE_AA,
                 )
@@ -4290,7 +4794,10 @@ class PupilTrackingGUI:
                 1,
             )
 
+        self._draw_ruler_overlay(out, scale)
+
     def _draw_debug_overlay(self, out: np.ndarray, scale: float) -> None:
+
         stats = self._last_opt_stats
         if not stats:
             return
@@ -4469,6 +4976,71 @@ class PupilTrackingGUI:
                 cv2.LINE_AA,
             )
 
+    def _draw_ruler_overlay(self, out: np.ndarray, scale: float) -> None:
+        if not getattr(self, "_ruler_calibration_active", False) and not getattr(self, "_ruler_points", None):
+            return
+        pts = getattr(self, "_ruler_points", [])
+        color = (0, 255, 255)
+        for i, pt in enumerate(pts):
+            cx = int(round(pt[0] * scale))
+            cy = int(round(pt[1] * scale))
+            cv2.circle(out, (cx, cy), 5, color, -1, cv2.LINE_AA)
+            cv2.circle(out, (cx, cy), 9, color, 2, cv2.LINE_AA)
+            cv2.putText(
+                out,
+                f"P{i+1}",
+                (cx + 8, cy - 8),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                max(0.4, 0.5 * scale),
+                color,
+                1,
+                cv2.LINE_AA,
+            )
+
+        if len(pts) >= 2:
+            p1 = (int(round(pts[0][0] * scale)), int(round(pts[0][1] * scale)))
+            p2 = (int(round(pts[1][0] * scale)), int(round(pts[1][1] * scale)))
+            cv2.line(out, p1, p2, color, 2, cv2.LINE_AA)
+            dist_px = math.hypot(pts[1][0] - pts[0][0], pts[1][1] - pts[0][1])
+            known_mm = float(self._ruler_known_dist_mm_var.get())
+            mid_x = (p1[0] + p2[0]) // 2
+            mid_y = (p1[1] + p2[1]) // 2
+            cv2.putText(
+                out,
+                f"{dist_px:.1f} px = {known_mm:.1f} mm ({dist_px/known_mm:.2f} px/mm)",
+                (mid_x + 10, mid_y),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                max(0.4, 0.52 * scale),
+                color,
+                2,
+                cv2.LINE_AA,
+            )
+
+    @staticmethod
+
+    def _draw_filled_structure(
+        out: np.ndarray,
+        ellipse_data: Any,
+        color: Tuple[int, int, int],
+        alpha: float,
+    ) -> None:
+        """Fill the circle/ellipse area with a semi-transparent colour overlay."""
+        if alpha <= 0.0:
+            return
+        overlay = out.copy()
+        ct = (int(round(ellipse_data.center_x)), int(round(ellipse_data.center_y)))
+        ratio = (ellipse_data.semi_minor / ellipse_data.semi_major
+                 if ellipse_data.semi_major > 0 else 1.0)
+        if ratio > _CIRCLE_DRAW_THRESHOLD:
+            r = int(round((ellipse_data.semi_major + ellipse_data.semi_minor) / 2.0))
+            cv2.circle(overlay, ct, r, color, -1, cv2.LINE_AA)
+        else:
+            axes = (int(round(ellipse_data.semi_major)),
+                    int(round(ellipse_data.semi_minor)))
+            cv2.ellipse(overlay, ct, axes, int(round(ellipse_data.angle_deg)),
+                        0, 360, color, -1, cv2.LINE_AA)
+        cv2.addWeighted(overlay, alpha, out, 1.0 - alpha, 0, out)
+
     @staticmethod
     def _draw_structure(
         out: np.ndarray,
@@ -4562,6 +5134,46 @@ class PupilTrackingGUI:
                     1,
                     cv2.LINE_AA,
                 )
+
+        ring_status = getattr(result, "ring_status", "unknown")
+        if ring_status == "ring_present":
+            ring_center = getattr(result, "ring_center", None)
+            ring_radius = getattr(result, "ring_radius", None)
+            ring_contour = getattr(result, "ring_contour", None)
+            if ring_center is not None and ring_radius is not None:
+                cx = (int(round(ring_center[0])))
+                cy = (int(round(ring_center[1])))
+                rr = int(round(ring_radius))
+                if ring_contour is not None and len(ring_contour) >= 5:
+                    cv2.drawContours(out, [ring_contour.astype(np.int32)], -1, (0, 0, 255), 2)
+                else:
+                    cv2.circle(out, (cx, cy), rr, (0, 0, 255), 2, cv2.LINE_AA)
+                if self._show_ring_center.get():
+                    _base = max(4, int(10))
+                    _ring_cross_size = int(max(12, min(_base, 26)))
+                    cv2.drawMarker(
+                        out,
+                        (cx, cy),
+                        (255, 255, 255),
+                        cv2.MARKER_CROSS,
+                        _ring_cross_size,
+                        2,
+                        cv2.LINE_AA,
+                    )
+                if self._show_measurements.get():
+                    label = f"R={ring_radius * 2.0:.0f}px"
+                    if cal.calibrated:
+                        label += f" ({ring_radius * 2.0 * cal.mm_per_px:.2f}mm)"
+                    cv2.putText(
+                        out,
+                        label,
+                        (cx + 10, cy - 18),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.45,
+                        (0, 0, 255),
+                        1,
+                        cv2.LINE_AA,
+                    )
 
         if self._show_offset.get() and result.has_both:
             p = result.pupil.ellipse
@@ -4808,20 +5420,74 @@ class PupilTrackingGUI:
                     var.set("---")
 
             if has_cal:
-                self._cv_vars["source"].set(cal.source)
+                method_tag = getattr(cal, "method", "anatomical")
+                self._cv_vars["source"].set(f"{cal.source} [{method_tag}]")
                 self._cv_vars["scale_px"].set(f"{cal.px_per_mm:.2f} px/mm")
                 self._cv_vars["scale_mm"].set(f"{cal.mm_per_px:.4f} mm/px")
-                if cal.reference_diameter_mm > 0:
+                if getattr(cal, "corneal_diameter_assumed_mm", None):
+                    self._cv_vars["reference"].set(
+                        f"Assumed {cal.corneal_diameter_assumed_mm:.1f}mm"
+                    )
+                elif cal.reference_diameter_mm > 0:
                     self._cv_vars["reference"].set(
                         f"{cal.reference_diameter_mm:.1f}mm ({cal.reference_diameter_px:.0f}px)"
                     )
                 else:
-                    self._cv_vars["reference"].set("---")
+                    self._cv_vars["reference"].set("Fixed External Scale")
             else:
                 self._cv_vars["source"].set("not calibrated")
                 self._cv_vars["scale_px"].set("---")
                 self._cv_vars["scale_mm"].set("---")
                 self._cv_vars["reference"].set("---")
+
+            # ── Corneal Dimensions (WTW) Card ──
+            limbus_res = getattr(result, "limbus", None)
+            if (
+                hasattr(self, "_wtw_vars")
+                and limbus_res is not None
+                and getattr(limbus_res, "detected", False)
+                and getattr(limbus_res, "ellipse", None) is not None
+                and has_cal
+            ):
+                le = limbus_res.ellipse
+                h_wtw = getattr(limbus_res, "wtw_horizontal_mm", None)
+                v_wtw = getattr(limbus_res, "wtw_vertical_mm", None)
+                m_wtw = getattr(limbus_res, "wtw_mean_mm", None)
+                astig = getattr(limbus_res, "wtw_astigmatism_mm", None)
+                is_m = getattr(limbus_res, "is_wtw_measured", False)
+                status = getattr(limbus_res, "wtw_validity_status", "UNAVAILABLE")
+
+                if h_wtw is None:
+                    h_wtw = 2.0 * le.semi_major * mm_per_px
+                    v_wtw = 2.0 * le.semi_minor * mm_per_px
+                    m_wtw = (h_wtw + v_wtw) / 2.0
+                    astig = abs(h_wtw - v_wtw)
+                    is_m = (getattr(cal, "method", "anatomical") != "anatomical")
+                    status = (
+                        "ANCHORED_BASELINE"
+                        if not is_m
+                        else (
+                            "VALID_CLINICAL_RANGE"
+                            if (9.5 <= m_wtw <= 13.5)
+                            else "OUT_OF_BOUNDS_WARNING"
+                        )
+                    )
+
+                self._wtw_vars["horizontal"].set(f"{h_wtw:.2f} mm")
+                self._wtw_vars["vertical"].set(f"{v_wtw:.2f} mm")
+                self._wtw_vars["mean"].set(f"{m_wtw:.2f} mm")
+                angle_deg = getattr(le, "angle_deg", 0.0) or 0.0
+                self._wtw_vars["astigmatism"].set(f"{astig:.2f} mm @ {angle_deg:.0f}°")
+                self._wtw_vars["status"].set(status.replace("_", " ").title())
+                self._wtw_vars["mode"].set(
+                    "Patient-Specific Measured"
+                    if is_m
+                    else "Anatomical Baseline (11.5mm)"
+                )
+            elif hasattr(self, "_wtw_vars"):
+                for var in self._wtw_vars.values():
+                    var.set("---")
+
 
             proc_ms = float(getattr(result.metadata, "processing_time_ms", 0.0) or 0.0)
             reused = bool(getattr(result.metadata, "reuse_cached_result", False))
@@ -5064,6 +5730,30 @@ class PupilTrackingGUI:
         )
         if not path:
             return
+        def _round(v: Any, nd: int = 4) -> Any:
+            """Round numeric values; pass through blanks/None as ''."""
+            if v is None or v == "":
+                return ""
+            try:
+                fv = float(v)
+                if not math.isfinite(fv):
+                    return ""
+                return round(fv, nd)
+            except (TypeError, ValueError):
+                return v
+
+        def _diam_mm(ell: Dict[str, Any], mm_px: float) -> Any:
+            """Prefer the pre-computed diameter_mm; else derive from mean
+            radius. NEVER recompute from semi-major alone (that collapses to
+            the calibration constant). This matches the Measurements panel,
+            which shows diameter = ellipse.radius * 2 * mm_per_px."""
+            if ell.get("diameter_mm") not in (None, ""):
+                return _round(ell.get("diameter_mm"))
+            r = ell.get("radius")
+            if r not in (None, "") and mm_px:
+                return _round(float(r) * 2.0 * mm_px)
+            return ""
+
         rows: List[Dict[str, Any]] = []
         for r in self._results_history:
             pupil = r.get("pupil", {})
@@ -5073,40 +5763,97 @@ class PupilTrackingGUI:
             cc = r.get("corneal_center", {})
             meta = r.get("metadata", {})
             cal_info = r.get("calibration", {})
-            mm_px = cal_info.get("mm_per_px", 0)
-            pupil_dia_px = pe.get("radius", 0) * 2 if pe.get("radius") else ""
-            limbus_dia_px = le.get("radius", 0) * 2 if le.get("radius") else ""
-            pupil_dia_mm = pupil_dia_px * mm_px if pupil_dia_px and mm_px else ""
-            limbus_dia_mm = limbus_dia_px * mm_px if limbus_dia_px and mm_px else ""
+            is_cal = bool(cal_info.get("calibrated", False))
+            mm_px = float(cal_info.get("mm_per_px", 0) or 0) if is_cal else 0.0
+            cal_method = cal_info.get("method", "") or ("anatomical" if is_cal else "")
+            assumed_mm = cal_info.get("corneal_diameter_assumed_mm", "")
+            if assumed_mm is None or not is_cal or cal_method != "anatomical":
+                assumed_mm = ""
+
+            # Diameter in px = mean radius * 2 (matches the panel exactly).
+            pupil_dia_px = (pe.get("radius", 0) or 0) * 2 if pe.get("radius") else ""
+            limbus_dia_px = (le.get("radius", 0) or 0) * 2 if le.get("radius") else ""
+
+            # Semi-axes in mm: dynamically computed from semi_major/minor px * mm_per_px
+            pupil_major_mm = _round(float(pe.get("semi_major", 0)) * mm_px) if (is_cal and pe.get("semi_major")) else ""
+            pupil_minor_mm = _round(float(pe.get("semi_minor", 0)) * mm_px) if (is_cal and pe.get("semi_minor")) else ""
+            limbus_major_mm = _round(float(le.get("semi_major", 0)) * mm_px) if (is_cal and le.get("semi_major")) else ""
+            limbus_minor_mm = _round(float(le.get("semi_minor", 0)) * mm_px) if (is_cal and le.get("semi_minor")) else ""
+
             rows.append(
                 {
                     "frame": meta.get("frame_number", ""),
+                    "source": meta.get("source", ""),
+                    "processing_time_ms": _round(meta.get("processing_time_ms", ""), 2),
+                    "latency_ms": _round(meta.get("latency_ms", ""), 2),
+                    # ── Pupil ─────────────────────────────────────────────
                     "pupil_detected": pupil.get("detected", False),
-                    "pupil_cx_px": pe.get("center_x", ""),
-                    "pupil_cy_px": pe.get("center_y", ""),
-                    "pupil_diameter_px": pupil_dia_px,
-                    "pupil_diameter_mm": pupil_dia_mm,
-                    "pupil_semi_major_px": pe.get("semi_major", ""),
-                    "pupil_semi_minor_px": pe.get("semi_minor", ""),
-                    "pupil_fit_type": pupil.get("fit_type", ""),
-                    "pupil_confidence": pupil.get("confidence", ""),
+                    "pupil_cx_px": _round(pe.get("center_x", "")),
+                    "pupil_cy_px": _round(pe.get("center_y", "")),
+                    "pupil_diameter_px": _round(pupil_dia_px),
+                    "pupil_diameter_mm": _diam_mm(pe, mm_px) if is_cal else "",
+                    "pupil_radius_mm": _round(pupil.get("radius_mm", "")) if is_cal else "",
+                    "pupil_semi_major_px": _round(pe.get("semi_major", "")),
+                    "pupil_semi_minor_px": _round(pe.get("semi_minor", "")),
+                    "pupil_semi_major_mm": pupil_major_mm,
+                    "pupil_semi_minor_mm": pupil_minor_mm,
+                    "pupil_angle_deg": _round(pe.get("angle_deg", ""), 2),
+                    "pupil_fit_type": pupil.get("fit_type", "") or "",
+                    "pupil_confidence": _round(pupil.get("confidence", ""), 3),
+                    # ── Limbus ────────────────────────────────────────────
                     "limbus_detected": limbus.get("detected", False),
-                    "limbus_cx_px": le.get("center_x", ""),
-                    "limbus_cy_px": le.get("center_y", ""),
-                    "limbus_diameter_px": limbus_dia_px,
-                    "limbus_diameter_mm": limbus_dia_mm,
-                    "limbus_semi_major_px": le.get("semi_major", ""),
-                    "limbus_semi_minor_px": le.get("semi_minor", ""),
-                    "limbus_fit_type": limbus.get("fit_type", ""),
-                    "limbus_confidence": limbus.get("confidence", ""),
-                    "offset_px": cc.get("offset_magnitude_px", ""),
-                    "offset_mm": cc.get("offset_magnitude_mm", ""),
-                    "offset_angle_deg": cc.get("offset_angle_deg", ""),
-                    "px_per_mm": cal_info.get("px_per_mm", ""),
+                    "limbus_cx_px": _round(le.get("center_x", "")),
+                    "limbus_cy_px": _round(le.get("center_y", "")),
+                    "limbus_diameter_px": _round(limbus_dia_px),
+                    "limbus_diameter_mm": _diam_mm(le, mm_px) if is_cal else "",
+                    "limbus_radius_mm": _round(limbus.get("radius_mm", "")) if is_cal else "",
+                    "limbus_semi_major_px": _round(le.get("semi_major", "")),
+                    "limbus_semi_minor_px": _round(le.get("semi_minor", "")),
+                    "limbus_semi_major_mm": limbus_major_mm,
+                    "limbus_semi_minor_mm": limbus_minor_mm,
+                    "limbus_angle_deg": _round(le.get("angle_deg", ""), 2),
+                    "limbus_fit_type": limbus.get("fit_type", "") or "",
+                    "limbus_confidence": _round(limbus.get("confidence", ""), 3),
+                    # ── Clinical Corneal WTW Dimensions ───────────────────
+                    "measured_wtw_horizontal_mm": _round(limbus.get("wtw_horizontal_mm", "")) if is_cal else "",
+                    "measured_wtw_vertical_mm": _round(limbus.get("wtw_vertical_mm", "")) if is_cal else "",
+                    "measured_wtw_mean_mm": _round(limbus.get("wtw_mean_mm", "")) if is_cal else "",
+                    "limbus_astigmatic_difference_mm": _round(limbus.get("wtw_astigmatism_mm", "")) if is_cal else "",
+                    "wtw_validity_status": limbus.get("wtw_validity_status", "") if is_cal else "",
+                    # ── Corneal center / offset ───────────────────────────
+                    "corneal_center_x_px": _round(
+                        (cc.get("center_px") or ["", ""])[0]
+                    ),
+
+                    "corneal_center_y_px": _round(
+                        (cc.get("center_px") or ["", ""])[1]
+                    ),
+                    "offset_px": _round(cc.get("offset_magnitude_px", "")),
+                    "offset_mm": _round(cc.get("offset_magnitude_mm", "")) if is_cal else "",
+                    "offset_angle_deg": _round(cc.get("offset_angle_deg", ""), 2),
+                    "corneal_reference_source": r.get("corneal_reference_source", ""),
+                    # ── Ring ──────────────────────────────────────────────
+                    "ring_status": r.get("ring_status", ""),
+                    "ring_center_x": _round(r.get("ring_center_x", "")),
+                    "ring_center_y": _round(r.get("ring_center_y", "")),
+                    "ring_radius_px": _round(r.get("ring_radius", "")),
+                    "ring_diameter_mm": (
+                        _round((r.get("ring_radius") or 0) * 2.0 * mm_px)
+                        if is_cal and r.get("ring_radius") and mm_px else ""
+                    ),
+                    "ring_dot_count": r.get("ring_dot_count", ""),
+                    # ── Calibration / quality ─────────────────────────────
+                    "calibrated": is_cal,
+                    "calibration_method": cal_method if is_cal else "",
+                    "corneal_diameter_assumed_mm": _round(assumed_mm, 2) if assumed_mm != "" else "",
+                    "px_per_mm": _round(cal_info.get("px_per_mm", "")) if is_cal else "",
+                    "mm_per_px": _round(cal_info.get("mm_per_px", ""), 6) if is_cal else "",
                     "quality": r.get("overall_quality", ""),
+                    "overall_confidence": _round(r.get("overall_confidence", ""), 3),
                     "grayscale_mode": r.get("grayscale_mode", ""),
                 }
             )
+
         with open(path, "w", newline="") as fh:
             writer = csv.DictWriter(fh, fieldnames=rows[0].keys())
             writer.writeheader()

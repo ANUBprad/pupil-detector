@@ -138,12 +138,14 @@ class EyeROIDetector:
             self._consecutive_misses = 0
             return roi
 
-        # 5. Full frame fallback
+        # 5. Full frame fallback with rapid closeup lock-on
         self._consecutive_misses += 1
-        if self._consecutive_misses > 30:
-            # Probably an eye closeup that we initially missed
+        if self._consecutive_misses >= 3:
+            # Rapid recovery: if 3 consecutive frames cannot find a sub-region face/eye,
+            # assume the image is an eye closeup/surgical microscope feed and lock closeup mode.
             self._closeup_mode = True
-        return ROIResult(0, 0, fw, fh, frame, False, False, 0.3)
+            return ROIResult(0, 0, fw, fh, frame, True, False, 0.8)
+        return ROIResult(0, 0, fw, fh, frame, False, False, 0.5)
 
     def reset(self):
         """Reset all state (call when switching videos)."""
@@ -203,33 +205,38 @@ class EyeROIDetector:
         gray = self._to_gray(frame)
         fh, fw = gray.shape
         blurred = cv2.GaussianBlur(gray, (15, 15), 0)
-        thresh = int(np.mean(blurred) * 0.45)
-        _, bw = cv2.threshold(blurred, thresh, 255, cv2.THRESH_BINARY_INV)
-        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (11, 11))
-        bw = cv2.morphologyEx(bw, cv2.MORPH_CLOSE, kernel)
-        bw = cv2.morphologyEx(bw, cv2.MORPH_OPEN, kernel)
 
-        contours, _ = cv2.findContours(bw, cv2.RETR_EXTERNAL,
-                                       cv2.CHAIN_APPROX_SIMPLE)
-        best, best_score = None, 0
-        for cnt in contours:
-            area = cv2.contourArea(cnt)
-            if area < 400 or area > fh * fw * 0.3:
-                continue
-            peri = cv2.arcLength(cnt, True)
-            if peri == 0:
-                continue
-            circ = 4 * np.pi * area / (peri * peri)
-            score = circ * np.sqrt(area)
-            if score > best_score:
-                best_score = score
-                best = cv2.boundingRect(cnt)
+        # Try adaptive / percentile thresholding for dark pupil/iris region
+        for thresh_mult in (0.45, 0.60, 0.35):
+            thresh = int(np.mean(blurred) * thresh_mult)
+            _, bw = cv2.threshold(blurred, thresh, 255, cv2.THRESH_BINARY_INV)
+            kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (11, 11))
+            bw = cv2.morphologyEx(bw, cv2.MORPH_CLOSE, kernel)
+            bw = cv2.morphologyEx(bw, cv2.MORPH_OPEN, kernel)
 
-        if best is None:
-            return ROIResult()
+            contours, _ = cv2.findContours(bw, cv2.RETR_EXTERNAL,
+                                           cv2.CHAIN_APPROX_SIMPLE)
+            best, best_score = None, 0
+            for cnt in contours:
+                area = cv2.contourArea(cnt)
+                if area < 300 or area > fh * fw * 0.5:
+                    continue
+                peri = cv2.arcLength(cnt, True)
+                if peri == 0:
+                    continue
+                circularity = 4 * np.pi * area / (peri * peri)
+                if circularity < 0.25:
+                    continue
+                score = area * circularity
+                if score > best_score:
+                    best_score = score
+                    best = cv2.boundingRect(cnt)
 
-        x, y, w, h = self._pad_and_square(*best, fw, fh)
-        return ROIResult(x, y, w, h, frame[y:y+h, x:x+w], False, False, 0.55)
+            if best is not None:
+                x, y, w, h = self._pad_and_square(*best, fw, fh)
+                return ROIResult(x, y, w, h, frame[y:y+h, x:x+w], False, False, 0.70)
+
+        return ROIResult()
 
     # ------------------------------------------------------------------
     # Closeup heuristic
@@ -241,12 +248,13 @@ class EyeROIDetector:
         center_mean = float(gray[m:h - m, m:w - m].mean())
         full_mean = float(gray.mean())
 
-        if center_mean < full_mean * 0.60:
-            if self._has_circular_blob(gray, min_frac=0.008, max_frac=0.18):
-                logger.info("Detected eye closeup (dark centre + blob)")
+        # If image dimensions suggest typical cropped video resolution or aspect ratio
+        if center_mean < full_mean * 0.75:
+            if self._has_circular_blob(gray, min_frac=0.003, max_frac=0.40):
+                logger.info("Detected eye closeup (dark centre + circular structure)")
                 return True
 
-        # No face → maybe it's already a crop of the eye
+        # No face detected → typical for surgical/microscope eye closeup feeds
         if not self.face_cascade.empty():
             small = gray
             if w > 640:
@@ -256,24 +264,28 @@ class EyeROIDetector:
             faces = self.face_cascade.detectMultiScale(
                 small, 1.1, 3, minSize=(50, 50))
             if len(faces) == 0:
-                if self._has_circular_blob(gray, 0.005, 0.20):
-                    logger.info("No face + circular blob → eye closeup")
+                if self._has_circular_blob(gray, 0.002, 0.45) or full_mean > 15:
+                    logger.info("No face in frame → treating as eye closeup feed")
                     return True
         return False
 
     def _has_circular_blob(self, gray: np.ndarray,
                            min_frac: float, max_frac: float) -> bool:
-        _, bw = cv2.threshold(gray, 0, 255,
-                              cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
-        contours, _ = cv2.findContours(bw, cv2.RETR_EXTERNAL,
-                                       cv2.CHAIN_APPROX_SIMPLE)
-        total = gray.shape[0] * gray.shape[1]
-        for cnt in contours:
-            a = cv2.contourArea(cnt)
-            if min_frac * total < a < max_frac * total:
-                p = cv2.arcLength(cnt, True)
-                if p > 0 and 4 * np.pi * a / (p * p) > 0.40:
-                    return True
+        for thresh_mode in (cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU, cv2.THRESH_BINARY_INV):
+            if thresh_mode == cv2.THRESH_BINARY_INV:
+                t_val = int(np.mean(gray) * 0.5)
+                _, bw = cv2.threshold(gray, t_val, 255, thresh_mode)
+            else:
+                _, bw = cv2.threshold(gray, 0, 255, thresh_mode)
+            contours, _ = cv2.findContours(bw, cv2.RETR_EXTERNAL,
+                                           cv2.CHAIN_APPROX_SIMPLE)
+            total = gray.shape[0] * gray.shape[1]
+            for cnt in contours:
+                a = cv2.contourArea(cnt)
+                if min_frac * total < a < max_frac * total:
+                    p = cv2.arcLength(cnt, True)
+                    if p > 0 and 4 * np.pi * a / (p * p) > 0.25:
+                        return True
         return False
 
     # ------------------------------------------------------------------

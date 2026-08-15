@@ -1714,7 +1714,39 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Kalman measurement noise (default: 0.1)",
     )
 
+    # Calibration group
+    cal_group = parser.add_argument_group("Calibration Options")
+    cal_group.add_argument(
+        "--calibration-mode",
+        type=str,
+        default="ANATOMICAL_ANCHOR",
+        choices=["ANATOMICAL_ANCHOR", "FIXED_PIXEL_SCALE", "RING_REFLECTION"],
+        help="Calibration mode: ANATOMICAL_ANCHOR, FIXED_PIXEL_SCALE, RING_REFLECTION (default: ANATOMICAL_ANCHOR)",
+    )
+    cal_group.add_argument(
+        "--px-per-mm",
+        type=float,
+        default=44.5,
+        metavar="F",
+        help="Fixed manual scale in px/mm for FIXED_PIXEL_SCALE mode (default: 44.5)",
+    )
+    cal_group.add_argument(
+        "--corneal-diameter-mm",
+        type=float,
+        default=11.5,
+        metavar="F",
+        help="Assumed horizontal corneal diameter in mm (default: 11.5)",
+    )
+    cal_group.add_argument(
+        "--ring-diameter-mm",
+        type=float,
+        default=9.4,
+        metavar="F",
+        help="Known reference suction ring diameter in mm (default: 9.4)",
+    )
+
     return parser
+
 
 
 # ================================================================
@@ -1852,8 +1884,14 @@ def main() -> None:
                 app._res_display.set(str(args.resolution))
             if hasattr(app, "_kp_display"):
                 app._kp_display.set(f"{args.kalman_process_noise:.3f}")
-            if hasattr(app, "_km_display"):
-                app._km_display.set(f"{args.kalman_measure_noise:.3f}")
+            if hasattr(app, "_calibration_mode_var"):
+                app._calibration_mode_var.set(args.calibration_mode)
+            if hasattr(app, "_fixed_scale_var"):
+                app._fixed_scale_var.set(args.px_per_mm)
+            if hasattr(app, "_corneal_ref_mm_var"):
+                app._corneal_ref_mm_var.set(args.corneal_diameter_mm)
+            if hasattr(app, "_ring_ref_mm_var"):
+                app._ring_ref_mm_var.set(args.ring_diameter_mm)
             if hasattr(app, "_grayscale_mode_var"):
                 app._grayscale_mode_var.set(args.grayscale)
             app._invalidate_fast_engine()
@@ -1875,6 +1913,10 @@ def main() -> None:
                 "kalman_process_noise",
                 "kalman_measure_noise",
                 "grayscale",
+                "calibration_mode",
+                "px_per_mm",
+                "corneal_diameter_mm",
+                "ring_diameter_mm",
             ]
         )
 

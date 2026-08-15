@@ -1,8 +1,27 @@
 # ============================================================================
 # Pupil-Limbus Detector - Complete Project Requirements
 # ============================================================================
-# This file contains ALL dependencies needed for the entire project.
 # Install all at once with: pip install -r requirements.txt
+#
+# INFERENCE RUNTIME — choose ONE of the options below:
+#
+#   Option A — CPU only (default, works everywhere):
+#     pip install onnxruntime
+#
+#   Option B — Intel Iris Xe / AMD iGPU / any DirectML GPU on Windows
+#              (recommended for the doctor's Lenovo IdeaPad i5-1135G7):
+#     pip install onnxruntime-directml
+#
+#   Option C — Intel CPU + iGPU together via OpenVINO (highest throughput
+#              on Intel hardware, uses CPU and iGPU simultaneously):
+#     pip install onnxruntime-openvino
+#
+#   Option D — NVIDIA discrete GPU:
+#     pip install onnxruntime-gpu
+#     (also reinstall torch with CUDA: see https://pytorch.org/get-started)
+#
+#   The app auto-detects which runtime is installed and picks the best
+#   available provider. Falling back to CPU if no GPU runtime is found.
 # ============================================================================
 
 # ============================================================================
@@ -49,5 +68,7 @@ pytest>=6.0.0                      # pytest - Unit testing framework for test su
 # NOTES:
 # - tkinter comes built-in with Python on Windows/macOS/Linux (no pip needed)
 # - Standard library modules (json, csv, pathlib, etc.) are included with Python
-# - All other imports are covered by the packages listed above
+# - onnx is needed only for model export (scripts/export_onnx.py,
+#   scripts/convert_to_onnx.py): pip install onnx
 # ============================================================================
+

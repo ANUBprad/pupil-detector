@@ -218,30 +218,46 @@ class VideoConfig:
     carry_forward_decay: float = 0.85
 
 
+from enum import Enum
+
+
+class CalibrationMode(str, Enum):
+    """Supported calibration modes."""
+    ANATOMICAL_ANCHOR = "ANATOMICAL_ANCHOR"  # Default: 11.5mm horizontal corneal standard
+    FIXED_PIXEL_SCALE = "FIXED_PIXEL_SCALE"  # External/fixed px_per_mm scale
+    RING_REFLECTION = "RING_REFLECTION"      # Known LED/suction ring dimension
+
+
 @dataclass
 class CalibrationConfig:
     """Spatial calibration parameters.
 
     Used to convert pixel measurements to millimetres using
-    known physical dimensions (suction ring or corneal diameter).
+    known physical dimensions (suction ring, corneal diameter, or fixed scale).
 
     Attributes
     ----------
+    mode : str
+        Active calibration mode: 'ANATOMICAL_ANCHOR', 'FIXED_PIXEL_SCALE', or 'RING_REFLECTION'.
     suction_ring_diameter_mm : float
-        Known diameter of the suction ring in mm.
+        Known diameter of the suction ring or placido ring in mm.
         Used for auto-calibration when detected in frame.
     corneal_diameter_mm : float
         Average horizontal visible iris diameter (HVID) in mm.
-        Fallback reference when suction ring not visible.
+        Used as reference anchor in ANATOMICAL_ANCHOR mode.
     manual_px_per_mm : float or None
-        If set, overrides auto-calibration with this fixed ratio.
+        Fixed scale ratio for FIXED_PIXEL_SCALE mode.
+    manual_mm_per_px : float or None
+        Alternative fixed scale ratio (mm per pixel).
     enable_auto_calibration : bool
         Whether to attempt auto-calibration from detected landmarks.
     """
 
+    mode: str = "ANATOMICAL_ANCHOR"
     suction_ring_diameter_mm: float = 9.4
     corneal_diameter_mm: float = 11.5
-    manual_px_per_mm: Optional[float] = None
+    manual_px_per_mm: Optional[float] = 44.5
+    manual_mm_per_px: Optional[float] = None
     enable_auto_calibration: bool = True
 
 

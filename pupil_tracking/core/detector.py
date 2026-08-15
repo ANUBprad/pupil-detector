@@ -605,8 +605,22 @@ class UnifiedDetector:
                 ring_result=ring_result,
             )
 
-        # -- Step 6: Auto-calibrate from limbus (stabilized) -----------
-        if (
+        # -- Step 6: Calibration (modular: anatomical / fixed scale / ring) ----
+        cal_mode = getattr(self._stabilized_cal, "mode", "ANATOMICAL_ANCHOR")
+        if cal_mode in ("FIXED_PIXEL_SCALE", "fixed_manual", "manual"):
+            self._calibration = self._stabilized_cal.update_from_limbus(result.limbus)
+        elif cal_mode == "RING_REFLECTION":
+            if ring_result.ring_radius is not None:
+                self._calibration = self._stabilized_cal.update_from_ring(ring_result.ring_radius)
+            elif (
+                result.limbus.detected
+                and result.limbus.ellipse is not None
+                and result.limbus.confidence > 0.5
+            ):
+                cal = self._stabilized_cal.update_from_limbus(result.limbus)
+                if cal.calibrated:
+                    self._calibration = cal
+        elif (
             result.limbus.detected
             and result.limbus.ellipse is not None
             and result.limbus.confidence > 0.5
@@ -614,9 +628,7 @@ class UnifiedDetector:
             cal = self._stabilized_cal.update_from_limbus(result.limbus)
             if cal.calibrated:
                 self._calibration = cal
-
-        # Auto-calibrate from ring if limbus not available but ring is
-        if (
+        elif (
             not self._calibration.calibrated
             and is_docked
             and ring_result.ring_radius is not None
@@ -1186,6 +1198,13 @@ class UnifiedDetector:
             d["limbus_radius"] = e.radius
             d["limbus_r"] = e.radius
             d["limbus_confidence"] = result.limbus.confidence
+            d["wtw_horizontal_mm"] = getattr(result.limbus, "wtw_horizontal_mm", None)
+            d["wtw_vertical_mm"] = getattr(result.limbus, "wtw_vertical_mm", None)
+            d["wtw_mean_mm"] = getattr(result.limbus, "wtw_mean_mm", None)
+            d["wtw_astigmatism_mm"] = getattr(result.limbus, "wtw_astigmatism_mm", None)
+            d["is_wtw_measured"] = getattr(result.limbus, "is_wtw_measured", False)
+            d["wtw_validity_status"] = getattr(result.limbus, "wtw_validity_status", "UNAVAILABLE")
+
 
         # Corneal center offset
         if result.corneal_center is not None:
@@ -1557,6 +1576,14 @@ class UnifiedDetector:
                 e.center_x * cal.mm_per_px,
                 e.center_y * cal.mm_per_px,
             )
+            from pupil_tracking.calibration.spatial_calibration import evaluate_clinical_wtw
+            h_wtw, v_wtw, m_wtw, astig, is_m, status = evaluate_clinical_wtw(result.limbus, cal)
+            result.limbus.wtw_horizontal_mm = h_wtw
+            result.limbus.wtw_vertical_mm = v_wtw
+            result.limbus.wtw_mean_mm = m_wtw
+            result.limbus.wtw_astigmatism_mm = astig
+            result.limbus.is_wtw_measured = is_m
+            result.limbus.wtw_validity_status = status
 
     # ================================================================
     # Calibration
@@ -1569,6 +1596,27 @@ class UnifiedDetector:
             "Calibration set: px_per_mm=%.2f source=%s",
             cal.px_per_mm,
             cal.source,
+        )
+
+    def set_calibration_mode(
+        self,
+        mode: str,
+        manual_px_per_mm: Optional[float] = None,
+        corneal_diameter_mm: Optional[float] = None,
+        ring_diameter_mm: Optional[float] = None,
+    ) -> None:
+        """Set active calibration mode and parameters."""
+        self._stabilized_cal.set_mode(
+            mode=mode,
+            manual_px_per_mm=manual_px_per_mm,
+            corneal_diameter_mm=corneal_diameter_mm,
+            ring_diameter_mm=ring_diameter_mm,
+        )
+        self._calibration = self._stabilized_cal._current_best()
+        self.logger.info(
+            "Detector calibration mode set to %s (px_per_mm=%s)",
+            mode,
+            self._calibration.px_per_mm if self._calibration.calibrated else "dynamic",
         )
 
     def calibrate_from_limbus(
@@ -1602,9 +1650,11 @@ class UnifiedDetector:
             px_per_mm=px_per_mm,
             mm_per_px=mm_per_px,
             source="limbus_diameter",
+            method="anatomical",
             reference_diameter_mm=corneal_diameter_mm,
             reference_diameter_px=diameter_px,
             confidence=float(np.clip(conf, 0.0, 1.0)),
+            corneal_diameter_assumed_mm=corneal_diameter_mm,
         )
         self._calibration = cal
         return cal
@@ -1643,9 +1693,11 @@ class UnifiedDetector:
             px_per_mm=px_per_mm,
             mm_per_px=mm_per_px,
             source="suction_ring_diameter",
+            method="ring_reflection",
             reference_diameter_mm=ring_diameter_mm,
             reference_diameter_px=diameter_px,
             confidence=float(np.clip(conf, 0.0, 1.0)),
+            corneal_diameter_assumed_mm=None,
         )
         self._calibration = cal
         self.logger.info(

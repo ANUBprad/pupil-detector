@@ -50,3 +50,7 @@ audit_*.jsonl
 # Data directories (keep structure, ignore data)
 clinical_data/training_data/
 diagnostic_output/
+
+# Assistant / Claude / Cursor config
+.claude/
+*.csv.xlsx
