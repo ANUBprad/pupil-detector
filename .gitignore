@@ -49,4 +49,10 @@ audit_*.jsonl
 
 # Data directories (keep structure, ignore data)
 clinical_data/training_data/
+clinical_data/clean/
+clinical_data/annotations/
+clinical_data/corrected_annotations/
 diagnostic_output/
+
+# Phase artifacts (temporary)
+_phase_artifacts/
