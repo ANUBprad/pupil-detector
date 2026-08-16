@@ -1055,8 +1055,9 @@ class TestRingConstrainedFitting:
         assert abs(pe.center_x - 381.5) < 0.5
         assert abs(pe.center_y - 334.1) < 0.5
         assert abs(pe.semi_major - 82.4) < 0.5
-        assert abs(r.pupil.confidence - 0.798) < 0.01
+        # Confidence now combines ML softmax + geometric fit quality
+        assert abs(r.pupil.confidence - 0.895) < 0.02
         assert abs(le.center_x - 383.5) < 0.5
         assert abs(le.center_y - 322.7) < 0.5
         assert abs(le.semi_major - 225.9) < 0.5
-        assert abs(r.limbus.confidence - 0.672) < 0.01
+        assert abs(r.limbus.confidence - 0.754) < 0.02

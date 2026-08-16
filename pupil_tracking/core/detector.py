@@ -1498,12 +1498,26 @@ class UnifiedDetector:
         force_limbus_overwrite: bool = False,
     ) -> None:
         """Overwrite pupil/limbus in *result* with SmartFitter output
-        when the new fit is valid and at least as confident."""
+        when the new fit is valid and at least as confident.
+
+        When ML probability information is available on *result*
+        (set by _ONNXEngineWrapper), the final confidence is a
+        combination of fit quality and ML confidence:
+            combined = (ml_confidence + fit_quality) / 2.0
+        This matches the formula used in detect_from_masks().
+        """
         if pupil_fit is not None and pupil_fit.valid:
             ep = self._fit_result_to_ellipse_params(pupil_fit)
-            new_conf = self._fit_result_confidence(pupil_fit)
+            fit_conf = self._fit_result_confidence(pupil_fit)
 
-            if (not result.pupil.detected) or new_conf >= result.pupil.confidence:
+            if (not result.pupil.detected) or fit_conf >= result.pupil.confidence:
+                # Combine ML confidence with fit quality when available
+                ml_conf = result._ml_pupil_confidence
+                if ml_conf is not None:
+                    new_conf = (ml_conf + fit_conf) / 2.0
+                else:
+                    new_conf = fit_conf
+
                 result.pupil.detected = True
                 result.pupil.ellipse = ep
                 result.pupil.confidence = new_conf
@@ -1515,13 +1529,20 @@ class UnifiedDetector:
 
         if limbus_fit is not None and limbus_fit.valid:
             ep = self._fit_result_to_ellipse_params(limbus_fit)
-            new_conf = self._fit_result_confidence(limbus_fit)
+            fit_conf = self._fit_result_confidence(limbus_fit)
 
             if (
                 not result.limbus.detected
                 or force_limbus_overwrite
-                or new_conf >= result.limbus.confidence
+                or fit_conf >= result.limbus.confidence
             ):
+                # Combine ML confidence with fit quality when available
+                ml_conf = result._ml_limbus_confidence
+                if ml_conf is not None:
+                    new_conf = (ml_conf + fit_conf) / 2.0
+                else:
+                    new_conf = fit_conf
+
                 result.limbus.detected = True
                 result.limbus.ellipse = ep
                 result.limbus.confidence = new_conf
@@ -2303,6 +2324,19 @@ class _ONNXEngineWrapper:
             raw_mask[ring_mask > 127] = 3
 
         result._raw_mask = raw_mask
+
+        # Compute ML confidence from softmax probabilities (A4).
+        # Stored on result for _apply_fit_to_result() to combine with
+        # geometric fit quality.
+        probs = masks.get("_probabilities", None)
+        class_map = masks.get("_class_map", None)
+        if probs is not None and class_map is not None:
+            pupil_region = class_map == 1
+            iris_region = class_map == 2
+            if np.any(pupil_region):
+                result._ml_pupil_confidence = float(np.mean(probs[1][pupil_region]))
+            if np.any(iris_region):
+                result._ml_limbus_confidence = float(np.mean(probs[2][iris_region]))
 
         # Set initial detection state from mask quality.
         # Confidence is NOT pre-filled here: it will be set by

@@ -443,6 +443,11 @@ class EyeDetectionResult:
     overall_confidence: float = 0.0
     alerts: List[str] = field(default_factory=list)
 
+    # ML-derived confidence from softmax probabilities.
+    # Set by ONNXEngineWrapper, consumed by _apply_fit_to_result().
+    _ml_pupil_confidence: Optional[float] = None
+    _ml_limbus_confidence: Optional[float] = None
+
     # ── convenience flags ───────────────────────────────────────────
 
     @property
