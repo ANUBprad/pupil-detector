@@ -277,6 +277,13 @@ class RedLightFilter:
             self._temporal_count = 1
             return current_mask
 
+        # ROI crop can change shape between frames (Haar cascade, manual ROI).
+        # Stale temporal mask must be replaced to avoid addWeighted crash.
+        if current_mask.shape != self._temporal_mask.shape:
+            self._temporal_mask = current_mask.copy()
+            self._temporal_count = 1
+            return current_mask
+
         if current_mask.sum() == 0 and self._temporal_mask.sum() > 0:
             confidence = min(self.temporal_confidence, self._temporal_count / 10.0)
             if confidence > 0.3:
