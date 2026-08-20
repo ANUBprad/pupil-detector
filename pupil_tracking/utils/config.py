@@ -131,6 +131,7 @@ class DetectionConfig:
     morph_iterations: int = 2
     enable_classical_fallback: bool = True
     classical_confidence_penalty: float = 0.85
+    pre_docked_limbus_shrink_factor: float = 0.93
 
 
 @dataclass

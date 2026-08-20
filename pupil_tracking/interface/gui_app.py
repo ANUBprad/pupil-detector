@@ -4103,7 +4103,10 @@ class PupilTrackingGUI:
                     "semi_major": semi_a,
                     "semi_minor": semi_b,
                     "angle_deg": float(getattr(fr, "limbus_angle", 0.0) or 0.0),
-                    "diameter_mm": (mean_r * 2.0 * mm) if cal.calibrated else None,
+                    # In anatomical mode, mean_r*2*mm ≡ wtw_m (algebraically
+                    # identical).  Use wtw_m explicitly so the CSV semantically
+                    # agrees with the WTW card rather than re-deriving from px.
+                    "diameter_mm": wtw_m if (cal.calibrated and wtw_m is not None) else ((mean_r * 2.0 * mm) if cal.calibrated else None),
                     "semi_major_mm": (semi_a * mm) if cal.calibrated else None,
                     "semi_minor_mm": (semi_b * mm) if cal.calibrated else None,
                 },

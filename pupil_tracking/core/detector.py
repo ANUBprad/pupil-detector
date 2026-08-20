@@ -593,7 +593,7 @@ class UnifiedDetector:
             and result.limbus.detected
             and result.limbus.ellipse is not None
         ):
-            shrink_factor = 0.93
+            shrink_factor = self.cfg.detection.pre_docked_limbus_shrink_factor
             result.limbus.ellipse.set_radius(
                 result.limbus.ellipse.radius * shrink_factor
             )
@@ -652,7 +652,7 @@ class UnifiedDetector:
         # ============================================================
         try:
             if (
-                getattr(result, "ring_status", "pre_docked") == "PRESENT"
+                getattr(result, "ring_status", "pre_docked") == "ring_present"
                 and getattr(result, "ring_inner_radius", None) is not None
                 and result.limbus.detected
                 and result.limbus.radius_mm is not None
