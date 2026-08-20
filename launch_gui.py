@@ -70,7 +70,7 @@ _RUNTIME_PROFILE = apply_runtime_optimizations(detect_runtime_profile())
 
 
 # -- Constants ---------------------------------------------------
-_CORNEAL_DIAMETER_MM = 11.5
+_CORNEAL_DIAMETER_MM = 12.0
 
 _BANNER = "Medevplus IXcentai - Surgical Grade"
 
@@ -1733,9 +1733,9 @@ def _build_parser() -> argparse.ArgumentParser:
     cal_group.add_argument(
         "--corneal-diameter-mm",
         type=float,
-        default=11.5,
+        default=12.0,
         metavar="F",
-        help="Assumed horizontal corneal diameter in mm (default: 11.5)",
+        help="Assumed horizontal corneal diameter in mm (default: 12.0)",
     )
     cal_group.add_argument(
         "--ring-diameter-mm",

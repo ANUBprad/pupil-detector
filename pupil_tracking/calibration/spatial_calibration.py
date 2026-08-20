@@ -3,7 +3,7 @@ Pixel-to-millimetre spatial calibration.
 
 Provides multiple calibration strategies:
     1. Suction ring (known diameter 9.0-9.5 mm)
-    2. Limbus / corneal diameter (average 11.5 mm)
+    2. Limbus / corneal diameter (average 12.0 mm)
     3. Manual calibration (user-provided px/mm)
     4. Known object in frame
 
@@ -37,7 +37,7 @@ class SpatialCalibrator:
     """
 
     # Known anatomical references (population averages)
-    CORNEAL_DIAMETER_MM = 11.5          # horizontal white-to-white
+    CORNEAL_DIAMETER_MM = 12.0          # horizontal white-to-white
     CORNEAL_DIAMETER_STD_MM = 0.5       # population std
     SUCTION_RING_DIAMETERS_MM = {
         "standard": 9.4,
@@ -48,7 +48,7 @@ class SpatialCalibrator:
     def __init__(
         self,
         mode: str = "ANATOMICAL_ANCHOR",
-        corneal_diameter_mm: float = 11.5,
+        corneal_diameter_mm: float = 12.0,
         manual_px_per_mm: Optional[float] = None,
         manual_mm_per_px: Optional[float] = None,
         suction_ring_diameter_mm: float = 9.4,
@@ -275,7 +275,7 @@ class StabilizedCalibrator:
     def __init__(
         self,
         config=None,
-        corneal_diameter_mm: float = 11.5,
+        corneal_diameter_mm: float = 12.0,
         mode: str = "ANATOMICAL_ANCHOR",
         manual_px_per_mm: Optional[float] = None,
         ring_diameter_mm: float = 9.4,

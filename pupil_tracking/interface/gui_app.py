@@ -10,7 +10,7 @@ Features:
     - Diameter display in pixels AND millimetres
     - Semi-major/semi-minor display in pixels AND millimetres
     - Offset display in pixels AND millimetres
-    - Auto-calibration from limbus (corneal diameter = 11.5 mm)
+    - Auto-calibration from limbus (corneal diameter = 12.0 mm)
     - Detection overlay with pupil, limbus, corneal centre, offset
     - Export results to CSV / JSON / snapshot
     - Quality grade badge
@@ -90,7 +90,7 @@ except ImportError:
 from pupil_tracking.interface.frame_recorder import FrameRecorder
 
 
-_CORNEAL_DIAMETER_MM = 11.5
+_CORNEAL_DIAMETER_MM = 12.0
 _CIRCLE_DRAW_THRESHOLD = 0.95
 
 _QUALITY_COLORS = {
@@ -256,7 +256,7 @@ class PupilTrackingGUI:
         self._calibration_mode_var = tk.StringVar(value=init_mode)
         init_manual_px = float(getattr(self.cfg.calibration, "manual_px_per_mm", 44.5) or 44.5) if hasattr(self.cfg, "calibration") else 44.5
         self._fixed_scale_var = tk.DoubleVar(value=init_manual_px)
-        init_corneal = float(getattr(self.cfg.calibration, "corneal_diameter_mm", 11.5) or 11.5) if hasattr(self.cfg, "calibration") else 11.5
+        init_corneal = float(getattr(self.cfg.calibration, "corneal_diameter_mm", 12.0) or 12.0) if hasattr(self.cfg, "calibration") else 12.0
         self._corneal_ref_mm_var = tk.DoubleVar(value=init_corneal)
         init_ring = float(getattr(self.cfg.calibration, "suction_ring_diameter_mm", 9.4) or 9.4) if hasattr(self.cfg, "calibration") else 9.4
         self._ring_ref_mm_var = tk.DoubleVar(value=init_ring)
@@ -1427,7 +1427,7 @@ class PupilTrackingGUI:
         ).pack(anchor=tk.W, pady=(0, 4))
 
         for mode_val, mode_text in [
-            ("ANATOMICAL_ANCHOR", "Anatomical Anchor (Cornea ≈ 11.5 mm)"),
+            ("ANATOMICAL_ANCHOR", "Anatomical Anchor (Cornea ≈ 12.0 mm)"),
             ("FIXED_PIXEL_SCALE", "Fixed Pixel Scale (Manual / External Target)"),
             ("RING_REFLECTION", "Ring Reflection (Purkinje / Placido Ring)"),
         ]:
@@ -2609,11 +2609,11 @@ class PupilTrackingGUI:
         ttk.Button(ring_row, text="Apply Ring Mode", command=_apply_ring).pack(side=tk.LEFT, padx=8)
 
         # Method 4: Anatomical Baseline Anchor
-        m4 = ttk.LabelFrame(container, text="Method 4: Anatomical Baseline Anchor (11.5 mm)", padding=10)
+        m4 = ttk.LabelFrame(container, text="Method 4: Anatomical Baseline Anchor (12.0 mm)", padding=10)
         m4.pack(fill=tk.X, pady=4)
         ttk.Label(
             m4,
-            text="Assumes horizontal corneal diameter is 11.5 mm (not patient-specific).",
+            text="Assumes horizontal corneal diameter is 12.0 mm (not patient-specific).",
             style="Muted.TLabel",
             justify=tk.LEFT,
         ).pack(anchor=tk.W, pady=(0, 6))
@@ -2622,9 +2622,9 @@ class PupilTrackingGUI:
             self._calibration_mode_var.set("ANATOMICAL_ANCHOR")
             self._schedule_live_settings_apply("calibration")
             wizard.destroy()
-            messagebox.showinfo("Baseline Set", "Calibration set to 11.5 mm Anatomical Anchor.")
+            messagebox.showinfo("Baseline Set", "Calibration set to 12.0 mm Anatomical Anchor.")
 
-        ttk.Button(m4, text="Reset to 11.5 mm Baseline Anchor", command=_apply_anatomical).pack(anchor=tk.W)
+        ttk.Button(m4, text="Reset to 12.0 mm Baseline Anchor", command=_apply_anatomical).pack(anchor=tk.W)
 
         # Footer close button
         btn_bar = ttk.Frame(wizard, padding=(16, 0, 16, 16))

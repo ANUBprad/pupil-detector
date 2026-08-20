@@ -178,7 +178,7 @@ class UnifiedDetector:
         corneal_mm = getattr(
             self.cfg.calibration,
             "corneal_diameter_mm",
-            11.5,
+            12.0,
         )
         self._stabilized_cal = StabilizedCalibrator(
             config=self.cfg.measurement_stabilization,
@@ -1622,7 +1622,7 @@ class UnifiedDetector:
     def calibrate_from_limbus(
         self,
         limbus: LimbusDetection,
-        corneal_diameter_mm: float = 11.5,
+        corneal_diameter_mm: float = 12.0,
     ) -> CalibrationInfo:
         """Calibrate using the known average corneal diameter.
 

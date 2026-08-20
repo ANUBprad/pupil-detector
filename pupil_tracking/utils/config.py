@@ -224,7 +224,7 @@ from enum import Enum
 
 class CalibrationMode(str, Enum):
     """Supported calibration modes."""
-    ANATOMICAL_ANCHOR = "ANATOMICAL_ANCHOR"  # Default: 11.5mm horizontal corneal standard
+    ANATOMICAL_ANCHOR = "ANATOMICAL_ANCHOR"  # Default: 12.0mm horizontal corneal standard
     FIXED_PIXEL_SCALE = "FIXED_PIXEL_SCALE"  # External/fixed px_per_mm scale
     RING_REFLECTION = "RING_REFLECTION"      # Known LED/suction ring dimension
 
@@ -256,7 +256,7 @@ class CalibrationConfig:
 
     mode: str = "ANATOMICAL_ANCHOR"
     suction_ring_diameter_mm: float = 9.4
-    corneal_diameter_mm: float = 11.5
+    corneal_diameter_mm: float = 12.0
     manual_px_per_mm: Optional[float] = 44.5
     manual_mm_per_px: Optional[float] = None
     enable_auto_calibration: bool = True
