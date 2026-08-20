@@ -1722,9 +1722,6 @@ class PupilTrackingGUI:
         self._wtw_vars["horizontal"] = add_row(wtw_frame, "Horizontal WTW:")
         self._wtw_vars["vertical"] = add_row(wtw_frame, "Vertical WTW:")
         self._wtw_vars["mean"] = add_row(wtw_frame, "Mean WTW:")
-        self._wtw_vars["astigmatism"] = add_row(wtw_frame, "Astigmatism:")
-        self._wtw_vars["status"] = add_row(wtw_frame, "Status:")
-        self._wtw_vars["mode"] = add_row(wtw_frame, "Scale Standard:")
 
         proc_frame = add_card(cards_outer, "PROCESSING", "ProcHeader.TLabel", 3, 0, 2)
         self._proc_time_var = add_row(proc_frame, "Proc. Time:")
@@ -5456,37 +5453,15 @@ class PupilTrackingGUI:
                 h_wtw = getattr(limbus_res, "wtw_horizontal_mm", None)
                 v_wtw = getattr(limbus_res, "wtw_vertical_mm", None)
                 m_wtw = getattr(limbus_res, "wtw_mean_mm", None)
-                astig = getattr(limbus_res, "wtw_astigmatism_mm", None)
-                is_m = getattr(limbus_res, "is_wtw_measured", False)
-                status = getattr(limbus_res, "wtw_validity_status", "UNAVAILABLE")
 
                 if h_wtw is None:
                     h_wtw = 2.0 * le.semi_major * mm_per_px
                     v_wtw = 2.0 * le.semi_minor * mm_per_px
                     m_wtw = (h_wtw + v_wtw) / 2.0
-                    astig = abs(h_wtw - v_wtw)
-                    is_m = (getattr(cal, "method", "anatomical") != "anatomical")
-                    status = (
-                        "ANCHORED_BASELINE"
-                        if not is_m
-                        else (
-                            "VALID_CLINICAL_RANGE"
-                            if (9.5 <= m_wtw <= 13.5)
-                            else "OUT_OF_BOUNDS_WARNING"
-                        )
-                    )
 
                 self._wtw_vars["horizontal"].set(f"{h_wtw:.2f} mm")
                 self._wtw_vars["vertical"].set(f"{v_wtw:.2f} mm")
                 self._wtw_vars["mean"].set(f"{m_wtw:.2f} mm")
-                angle_deg = getattr(le, "angle_deg", 0.0) or 0.0
-                self._wtw_vars["astigmatism"].set(f"{astig:.2f} mm @ {angle_deg:.0f}°")
-                self._wtw_vars["status"].set(status.replace("_", " ").title())
-                self._wtw_vars["mode"].set(
-                    "Patient-Specific Measured"
-                    if is_m
-                    else "Anatomical Baseline (11.5mm)"
-                )
             elif hasattr(self, "_wtw_vars"):
                 for var in self._wtw_vars.values():
                     var.set("---")
