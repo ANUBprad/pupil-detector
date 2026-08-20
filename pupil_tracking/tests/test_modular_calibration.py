@@ -35,9 +35,9 @@ def test_anatomical_anchor_calibration():
     assert cal.calibrated is True
     assert cal.method == "anatomical"
     assert cal.corneal_diameter_assumed_mm == 11.5
-    # Major diameter = 500 px -> 500 / 11.5 = 43.478 px/mm
-    assert pytest.approx(cal.px_per_mm, rel=1e-3) == 500.0 / 11.5
-    assert pytest.approx(cal.mm_per_px, rel=1e-3) == 11.5 / 500.0
+    # Mean diameter = 250 + 240 = 490 px -> 490 / 11.5 = 42.609 px/mm
+    assert pytest.approx(cal.px_per_mm, rel=1e-3) == 490.0 / 11.5
+    assert pytest.approx(cal.mm_per_px, rel=1e-3) == 11.5 / 490.0
 
 
 def test_fixed_pixel_scale_dynamic_limbus_mm():
@@ -226,4 +226,143 @@ def test_evaluate_clinical_wtw_anatomical_anchor():
     d = limbus.to_dict()
     assert "wtw_horizontal_mm" in d
     assert "wtw_validity_status" in d
+
+
+# ================================================================
+# Regression tests — semi-major and WTW must be dynamic
+# ================================================================
+
+def test_semi_major_mm_dynamic_anatomical_anchor():
+    """Different elliptical geometries must yield different semi-major mm values.
+
+    Before the fix, semi_major_mm was always corneal/2 due to
+    calibrating from semi_major and then converting semi_major with
+    the same scale.
+    """
+    corneal = 12.0
+    calibrator = SpatialCalibrator(mode="ANATOMICAL_ANCHOR", corneal_diameter_mm=corneal)
+
+    limbus_a = LimbusDetection(
+        detected=True,
+        ellipse=EllipseParams(center_x=320, center_y=240, semi_major=250.0, semi_minor=240.0),
+        confidence=0.9,
+    )
+    limbus_b = LimbusDetection(
+        detected=True,
+        ellipse=EllipseParams(center_x=320, center_y=240, semi_major=300.0, semi_minor=240.0),
+        confidence=0.9,
+    )
+
+    cal_a = calibrator.calibrate_from_limbus(limbus_a)
+    cal_b = SpatialCalibrator(mode="ANATOMICAL_ANCHOR", corneal_diameter_mm=corneal).calibrate_from_limbus(limbus_b)
+
+    smm_a = limbus_a.ellipse.semi_major * cal_a.mm_per_px
+    smm_b = limbus_b.ellipse.semi_major * cal_b.mm_per_px
+
+    assert smm_a != corneal / 2.0, "semi_major_mm must not equal corneal/2 (tautology)"
+    assert smm_b != corneal / 2.0
+    assert pytest.approx(smm_a, rel=1e-6) == 250.0 * 12.0 / (250.0 + 240.0)
+    assert pytest.approx(smm_b, rel=1e-6) == 300.0 * 12.0 / (300.0 + 240.0)
+    assert abs(smm_a - smm_b) > 0.1
+
+
+def test_horizontal_wtw_dynamic_anatomical_anchor():
+    """Different elliptical geometries must yield different horizontal WTW values."""
+    from pupil_tracking.calibration.spatial_calibration import evaluate_clinical_wtw
+
+    corneal = 12.0
+    calibrator = SpatialCalibrator(mode="ANATOMICAL_ANCHOR", corneal_diameter_mm=corneal)
+
+    limbus_a = LimbusDetection(
+        detected=True,
+        ellipse=EllipseParams(center_x=320, center_y=240, semi_major=250.0, semi_minor=240.0),
+        confidence=0.9,
+    )
+    limbus_b = LimbusDetection(
+        detected=True,
+        ellipse=EllipseParams(center_x=320, center_y=240, semi_major=300.0, semi_minor=240.0),
+        confidence=0.9,
+    )
+
+    cal_a = calibrator.calibrate_from_limbus(limbus_a)
+    cal_b = SpatialCalibrator(mode="ANATOMICAL_ANCHOR", corneal_diameter_mm=corneal).calibrate_from_limbus(limbus_b)
+
+    h_a, _, _, _, _, _ = evaluate_clinical_wtw(limbus_a, cal_a)
+    h_b, _, _, _, _, _ = evaluate_clinical_wtw(limbus_b, cal_b)
+
+    assert h_a != corneal, "h_wtw must not equal corneal (tautology)"
+    assert h_b != corneal
+    assert abs(h_a - h_b) > 0.1
+
+
+def test_semi_minor_mm_dynamic_anatomical_anchor():
+    """Different semi-minor values must yield different semi-minor mm values."""
+    corneal = 12.0
+
+    limbus_a = LimbusDetection(
+        detected=True,
+        ellipse=EllipseParams(center_x=320, center_y=240, semi_major=260.0, semi_minor=240.0),
+        confidence=0.9,
+    )
+    limbus_b = LimbusDetection(
+        detected=True,
+        ellipse=EllipseParams(center_x=320, center_y=240, semi_major=260.0, semi_minor=280.0),
+        confidence=0.9,
+    )
+
+    cal_a = SpatialCalibrator(mode="ANATOMICAL_ANCHOR", corneal_diameter_mm=corneal).calibrate_from_limbus(limbus_a)
+    cal_b = SpatialCalibrator(mode="ANATOMICAL_ANCHOR", corneal_diameter_mm=corneal).calibrate_from_limbus(limbus_b)
+
+    smm_a = limbus_a.ellipse.semi_minor * cal_a.mm_per_px
+    smm_b = limbus_b.ellipse.semi_minor * cal_b.mm_per_px
+
+    assert smm_a != smm_b
+    assert pytest.approx(smm_a, rel=1e-6) == 240.0 * 12.0 / (260.0 + 240.0)
+    assert pytest.approx(smm_b, rel=1e-6) == 280.0 * 12.0 / (260.0 + 280.0)
+
+
+def test_assumed_cornea_does_not_overwrite_independent():
+    """With FIXED_PIXEL_SCALE, changing assumed corneal diameter must NOT change mm values."""
+    fixed_scale = 44.5
+    cornea_a = 11.5
+    cornea_b = 12.0
+
+    limbus = LimbusDetection(
+        detected=True,
+        ellipse=EllipseParams(center_x=320, center_y=240, semi_major=260.0, semi_minor=250.0),
+        confidence=0.9,
+    )
+
+    cal_a = SpatialCalibrator(mode="FIXED_PIXEL_SCALE", manual_px_per_mm=fixed_scale).calibrate_from_limbus(
+        limbus, corneal_diameter_mm=cornea_a
+    )
+    cal_b = SpatialCalibrator(mode="FIXED_PIXEL_SCALE", manual_px_per_mm=fixed_scale).calibrate_from_limbus(
+        limbus, corneal_diameter_mm=cornea_b
+    )
+
+    smm_a = limbus.ellipse.semi_major * cal_a.mm_per_px
+    smm_b = limbus.ellipse.semi_major * cal_b.mm_per_px
+    assert pytest.approx(smm_a) == pytest.approx(smm_b), \
+        "Independent calibration must ignore assumed corneal diameter"
+    assert cal_a.corneal_diameter_assumed_mm is None
+    assert cal_b.corneal_diameter_assumed_mm is None
+
+
+def test_pixel_geometry_unchanged_by_calibration():
+    """Changing calibration reference must never modify pixel measurements."""
+    limbus = LimbusDetection(
+        detected=True,
+        ellipse=EllipseParams(center_x=320, center_y=240, semi_major=260.0, semi_minor=250.0),
+        confidence=0.9,
+    )
+    pre_major = limbus.ellipse.semi_major
+    pre_minor = limbus.ellipse.semi_minor
+
+    SpatialCalibrator(mode="ANATOMICAL_ANCHOR", corneal_diameter_mm=11.5).calibrate_from_limbus(limbus)
+    assert limbus.ellipse.semi_major == pre_major
+    assert limbus.ellipse.semi_minor == pre_minor
+
+    SpatialCalibrator(mode="FIXED_PIXEL_SCALE", manual_px_per_mm=44.5).calibrate_from_limbus(limbus)
+    assert limbus.ellipse.semi_major == pre_major
+    assert limbus.ellipse.semi_minor == pre_minor
 
