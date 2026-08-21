@@ -93,11 +93,9 @@ class SpatialCalibrator:
         if not limbus.detected or limbus.ellipse is None:
             return CalibrationInfo()
 
-        # Use mean limbus diameter (semi_major + semi_minor) for calibration.
-        # This avoids the tautology where semi_major_mm = corneal/2 constant,
-        # because the calibration reference is the overall limbus size, not
-        # the semi-major axis that is subsequently converted to mm.
-        diameter_px = limbus.ellipse.semi_major + limbus.ellipse.semi_minor
+        # Use semi-major axis only (horizontal corneal diameter)
+        # to calibrate against the assumed horizontal HVID.
+        diameter_px = limbus.ellipse.semi_major * 2.0
         if diameter_px < 20:
             return CalibrationInfo()
 
@@ -357,14 +355,13 @@ class StabilizedCalibrator:
         if not limbus.detected or limbus.ellipse is None:
             return self._current_best()
 
-        # Use mean limbus diameter (semi_major + semi_minor) for calibration.
-        # This avoids the tautology where semi_major_mm = corneal/2 constant.
+        # Use semi-major axis (horizontal corneal diameter) for anatomical calibration.
+        # This anchors horizontal WTW to the assumed HVID.
         semi_major_px = limbus.ellipse.semi_major
-        semi_minor_px = limbus.ellipse.semi_minor
         if semi_major_px < 5:
             return self._current_best()
 
-        diameter_px = semi_major_px + semi_minor_px
+        diameter_px = semi_major_px * 2.0
         new_val = diameter_px / self._corneal_mm
 
         # Bypass smoothing if disabled

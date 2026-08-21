@@ -3791,17 +3791,16 @@ class PupilTrackingGUI:
                     corneal_diameter_assumed_mm=None,
                 )
             elif fr.limbus_axes is not None:
-                semi_a, semi_b = max(fr.limbus_axes) / 2.0, min(fr.limbus_axes) / 2.0
-                limbus_mean_dia = semi_a + semi_b
-                px_per_mm = limbus_mean_dia / corneal_mm
+                limbus_semi_major_dia = float(max(fr.limbus_axes))
+                px_per_mm = limbus_semi_major_dia / corneal_mm
                 cal = SimpleNamespace(
                     calibrated=True,
                     px_per_mm=px_per_mm,
                     mm_per_px=1.0 / px_per_mm if px_per_mm > 0 else 0.0,
-                    source="limbus_mean_diameter (fallback)",
+                    source="limbus_semi_major (fallback)",
                     method="anatomical",
                     reference_diameter_mm=corneal_mm,
-                    reference_diameter_px=limbus_mean_dia,
+                    reference_diameter_px=limbus_semi_major_dia,
                     confidence=min(0.85, fr.confidence),
                     corneal_diameter_assumed_mm=corneal_mm,
                 )
@@ -3819,18 +3818,17 @@ class PupilTrackingGUI:
                 )
         else:  # ANATOMICAL_ANCHOR
             if fr.limbus_axes is not None:
-                semi_a, semi_b = max(fr.limbus_axes) / 2.0, min(fr.limbus_axes) / 2.0
-                limbus_mean_dia = semi_a + semi_b
-                px_per_mm = limbus_mean_dia / corneal_mm
+                limbus_semi_major_dia = float(max(fr.limbus_axes))
+                px_per_mm = limbus_semi_major_dia / corneal_mm
                 mm_per_px = 1.0 / px_per_mm if px_per_mm > 0 else 0.0
                 cal = SimpleNamespace(
                     calibrated=True,
                     px_per_mm=px_per_mm,
                     mm_per_px=mm_per_px,
-                    source="limbus_mean_diameter (optimised)",
+                    source="limbus_semi_major (optimised)",
                     method="anatomical",
                     reference_diameter_mm=corneal_mm,
-                    reference_diameter_px=limbus_mean_dia,
+                    reference_diameter_px=limbus_semi_major_dia,
                     confidence=min(0.95, fr.confidence + 0.05),
                     corneal_diameter_assumed_mm=corneal_mm,
                 )

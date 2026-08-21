@@ -35,9 +35,9 @@ def test_anatomical_anchor_calibration():
     assert cal.calibrated is True
     assert cal.method == "anatomical"
     assert cal.corneal_diameter_assumed_mm == 11.5
-    # Mean diameter = 250 + 240 = 490 px -> 490 / 11.5 = 42.609 px/mm
-    assert pytest.approx(cal.px_per_mm, rel=1e-3) == 490.0 / 11.5
-    assert pytest.approx(cal.mm_per_px, rel=1e-3) == 11.5 / 490.0
+    # Major diameter = 2 * 250 = 500 px -> 500 / 11.5 = 43.478 px/mm
+    assert pytest.approx(cal.px_per_mm, rel=1e-3) == 500.0 / 11.5
+    assert pytest.approx(cal.mm_per_px, rel=1e-3) == 11.5 / 500.0
 
 
 def test_fixed_pixel_scale_dynamic_limbus_mm():
@@ -229,96 +229,96 @@ def test_evaluate_clinical_wtw_anatomical_anchor():
 
 
 # ================================================================
-# Regression tests — semi-major and WTW must be dynamic
+# Regression tests — independent calibration and invariants
 # ================================================================
 
-def test_semi_major_mm_dynamic_anatomical_anchor():
-    """Different elliptical geometries must yield different semi-major mm values.
+def test_anatomical_anchor_anchored_semantics():
+    """ANATOMICAL_ANCHOR anchors horizontal WTW to the assumed HVID.
 
-    Before the fix, semi_major_mm was always corneal/2 due to
-    calibrating from semi_major and then converting semi_major with
-    the same scale.
+    This is by design: the assumed horizontal corneal diameter IS the
+    calibration reference, so horizontal WTW equals it by construction.
+    Vertical WTW varies with ellipticity.
     """
-    corneal = 12.0
-    calibrator = SpatialCalibrator(mode="ANATOMICAL_ANCHOR", corneal_diameter_mm=corneal)
-
-    limbus_a = LimbusDetection(
-        detected=True,
-        ellipse=EllipseParams(center_x=320, center_y=240, semi_major=250.0, semi_minor=240.0),
-        confidence=0.9,
-    )
-    limbus_b = LimbusDetection(
-        detected=True,
-        ellipse=EllipseParams(center_x=320, center_y=240, semi_major=300.0, semi_minor=240.0),
-        confidence=0.9,
-    )
-
-    cal_a = calibrator.calibrate_from_limbus(limbus_a)
-    cal_b = SpatialCalibrator(mode="ANATOMICAL_ANCHOR", corneal_diameter_mm=corneal).calibrate_from_limbus(limbus_b)
-
-    smm_a = limbus_a.ellipse.semi_major * cal_a.mm_per_px
-    smm_b = limbus_b.ellipse.semi_major * cal_b.mm_per_px
-
-    assert smm_a != corneal / 2.0, "semi_major_mm must not equal corneal/2 (tautology)"
-    assert smm_b != corneal / 2.0
-    assert pytest.approx(smm_a, rel=1e-6) == 250.0 * 12.0 / (250.0 + 240.0)
-    assert pytest.approx(smm_b, rel=1e-6) == 300.0 * 12.0 / (300.0 + 240.0)
-    assert abs(smm_a - smm_b) > 0.1
-
-
-def test_horizontal_wtw_dynamic_anatomical_anchor():
-    """Different elliptical geometries must yield different horizontal WTW values."""
     from pupil_tracking.calibration.spatial_calibration import evaluate_clinical_wtw
 
     corneal = 12.0
-    calibrator = SpatialCalibrator(mode="ANATOMICAL_ANCHOR", corneal_diameter_mm=corneal)
+    limbus = LimbusDetection(
+        detected=True,
+        ellipse=EllipseParams(center_x=320, center_y=240, semi_major=250.0, semi_minor=230.0),
+        confidence=0.9,
+    )
+
+    cal = SpatialCalibrator(mode="ANATOMICAL_ANCHOR", corneal_diameter_mm=corneal).calibrate_from_limbus(limbus)
+
+    # px_per_mm = (2 * 250) / 12 = 41.667
+    assert pytest.approx(cal.px_per_mm, rel=1e-3) == 500.0 / 12.0
+
+    # semi_major_mm = corneal / 2 = 6.0 (anchored)
+    smm = limbus.ellipse.semi_major * cal.mm_per_px
+    assert pytest.approx(smm, rel=1e-6) == 6.0
+
+    h, v, m, astig, is_m, status = evaluate_clinical_wtw(limbus, cal)
+
+    # Horizontal WTW = assumed corneal diameter (anchored by design)
+    assert pytest.approx(h, rel=1e-6) == corneal
+
+    # Vertical WTW = 2 * 230 * 12 / 500 = 11.04 (varies with ellipticity)
+    assert pytest.approx(v, rel=1e-3) == 11.04
+    assert v < h
+
+    # Status is ANCHORED_BASELINE (not independent measurement)
+    assert status == "ANCHORED_BASELINE"
+    assert is_m is False
+
+
+def test_ring_reflection_dynamic_measurements():
+    """RING_REFLECTION uses an independent physical scale.
+
+    Different pixel geometries yield different semi-major mm and horizontal
+    WTW values, because the calibration reference (ring diameter) is
+    independent of the limbus ellipse.
+    """
+    from pupil_tracking.calibration.spatial_calibration import evaluate_clinical_wtw
+
+    ring_diam = 9.4
+    ring_radius = 235.0
 
     limbus_a = LimbusDetection(
         detected=True,
-        ellipse=EllipseParams(center_x=320, center_y=240, semi_major=250.0, semi_minor=240.0),
+        ellipse=EllipseParams(center_x=320, center_y=240, semi_major=250.0, semi_minor=230.0),
         confidence=0.9,
     )
     limbus_b = LimbusDetection(
         detected=True,
-        ellipse=EllipseParams(center_x=320, center_y=240, semi_major=300.0, semi_minor=240.0),
+        ellipse=EllipseParams(center_x=320, center_y=240, semi_major=300.0, semi_minor=230.0),
         confidence=0.9,
     )
 
-    cal_a = calibrator.calibrate_from_limbus(limbus_a)
-    cal_b = SpatialCalibrator(mode="ANATOMICAL_ANCHOR", corneal_diameter_mm=corneal).calibrate_from_limbus(limbus_b)
+    sc_a = StabilizedCalibrator(mode="RING_REFLECTION", ring_diameter_mm=ring_diam)
+    sc_a._enabled = False
+    cal_a = sc_a.update_from_ring(ring_radius_px=ring_radius)
+    assert cal_a.method == "ring_reflection"
+    # px_per_mm = 470 / 9.4 = 50.0
+    assert pytest.approx(cal_a.px_per_mm) == 50.0
+
+    sc_b = StabilizedCalibrator(mode="RING_REFLECTION", ring_diameter_mm=ring_diam)
+    sc_b._enabled = False
+    cal_b = sc_b.update_from_ring(ring_radius_px=ring_radius)
 
     h_a, _, _, _, _, _ = evaluate_clinical_wtw(limbus_a, cal_a)
     h_b, _, _, _, _, _ = evaluate_clinical_wtw(limbus_b, cal_b)
+    smm_a = limbus_a.ellipse.semi_major * cal_a.mm_per_px
+    smm_b = limbus_b.ellipse.semi_major * cal_b.mm_per_px
 
-    assert h_a != corneal, "h_wtw must not equal corneal (tautology)"
-    assert h_b != corneal
-    assert abs(h_a - h_b) > 0.1
-
-
-def test_semi_minor_mm_dynamic_anatomical_anchor():
-    """Different semi-minor values must yield different semi-minor mm values."""
-    corneal = 12.0
-
-    limbus_a = LimbusDetection(
-        detected=True,
-        ellipse=EllipseParams(center_x=320, center_y=240, semi_major=260.0, semi_minor=240.0),
-        confidence=0.9,
-    )
-    limbus_b = LimbusDetection(
-        detected=True,
-        ellipse=EllipseParams(center_x=320, center_y=240, semi_major=260.0, semi_minor=280.0),
-        confidence=0.9,
-    )
-
-    cal_a = SpatialCalibrator(mode="ANATOMICAL_ANCHOR", corneal_diameter_mm=corneal).calibrate_from_limbus(limbus_a)
-    cal_b = SpatialCalibrator(mode="ANATOMICAL_ANCHOR", corneal_diameter_mm=corneal).calibrate_from_limbus(limbus_b)
-
-    smm_a = limbus_a.ellipse.semi_minor * cal_a.mm_per_px
-    smm_b = limbus_b.ellipse.semi_minor * cal_b.mm_per_px
-
+    # Different pixel geometries produce different mm measurements
     assert smm_a != smm_b
-    assert pytest.approx(smm_a, rel=1e-6) == 240.0 * 12.0 / (260.0 + 240.0)
-    assert pytest.approx(smm_b, rel=1e-6) == 280.0 * 12.0 / (260.0 + 280.0)
+    assert h_a != h_b
+    assert pytest.approx(smm_a, rel=1e-3) == 250.0 / 50.0
+    assert pytest.approx(smm_b, rel=1e-3) == 300.0 / 50.0
+
+    # Horizontal WTW is NOT anchored to any assumed corneal diameter
+    assert pytest.approx(h_a, rel=1e-3) == 500.0 / 50.0  # 10.0 mm
+    assert pytest.approx(h_b, rel=1e-3) == 600.0 / 50.0  # 12.0 mm
 
 
 def test_assumed_cornea_does_not_overwrite_independent():

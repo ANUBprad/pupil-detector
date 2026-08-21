@@ -1325,9 +1325,9 @@ def _frame_result_to_dict(fr: Any) -> Dict[str, Any]:
         d["limbus"] = {"detected": False, "ellipse": {}}
 
     if fr.limbus_axes is not None:
-        limbus_mean_dia = max(fr.limbus_axes) / 2.0 + min(fr.limbus_axes) / 2.0
-        if limbus_mean_dia > 0:
-            px_per_mm = limbus_mean_dia / _CORNEAL_DIAMETER_MM
+        limbus_full_dia = max(fr.limbus_axes)
+        if limbus_full_dia > 0:
+            px_per_mm = limbus_full_dia / _CORNEAL_DIAMETER_MM
             d["calibration"] = {
                 "calibrated": True,
                 "mm_per_px": 1.0 / px_per_mm,

@@ -1624,17 +1624,15 @@ class UnifiedDetector:
         limbus: LimbusDetection,
         corneal_diameter_mm: float = 12.0,
     ) -> CalibrationInfo:
-        """Calibrate using the known average corneal diameter.
+        """Calibrate using the known average horizontal corneal diameter (HVID).
 
-        Uses the **mean limbus diameter** (semi_major + semi_minor) so
-        that the semi-major and semi-minor axes can each show natural
-        variation when the limbus is elliptical, avoiding the tautology
-        where semi_major_mm always equals corneal/2.
+        Uses the semi-major axis (horizontal limbus diameter) so that
+        horizontal WTW is anchored to the assumed HVID reference.
         """
         if not limbus.detected or limbus.ellipse is None:
             return CalibrationInfo()
 
-        diameter_px = limbus.ellipse.semi_major + limbus.ellipse.semi_minor
+        diameter_px = limbus.ellipse.semi_major * 2.0
         if diameter_px < 10:
             return CalibrationInfo()
 
