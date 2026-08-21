@@ -2924,6 +2924,38 @@ class PupilTrackingGUI:
             self._load_and_detect_image(str(img_path))
         self._status_var.set(f"Processed {len(images)} images")
 
+    # ================================================================
+    # Synchronous calibration sync — runs BEFORE every detection
+    # to guarantee the detector uses the current GUI settings
+    # (eliminates race with the 180 ms debounce in
+    # _schedule_live_settings_apply).
+    # ================================================================
+
+    def _sync_calibration_to_detector(self) -> None:
+        """Push current GUI calibration settings into the detector immediately.
+
+        Called synchronously before every detection so that the detector
+        always reflects the user's latest calibration choice, even when
+        the 180 ms debounced ``_apply_live_settings`` has not fired yet.
+        """
+        if self._detector is None:
+            return
+        cal_mode = self._calibration_mode_var.get()
+        manual_px = float(self._fixed_scale_var.get())
+        corneal_mm = float(self._corneal_ref_mm_var.get())
+        ring_mm = float(self._ring_ref_mm_var.get())
+        if hasattr(self.cfg, "calibration"):
+            self.cfg.calibration.mode = cal_mode
+            self.cfg.calibration.manual_px_per_mm = manual_px
+            self.cfg.calibration.corneal_diameter_mm = corneal_mm
+            self.cfg.calibration.suction_ring_diameter_mm = ring_mm
+        self._detector.set_calibration_mode(
+            mode=cal_mode,
+            manual_px_per_mm=manual_px,
+            corneal_diameter_mm=corneal_mm,
+            ring_diameter_mm=ring_mm,
+        )
+
     def _load_and_detect_image(self, path: str) -> None:
         image = cv2.imread(path)
         if image is None:
@@ -2936,6 +2968,7 @@ class PupilTrackingGUI:
             self._current_result = None
             self._refresh_display()
             return
+        self._sync_calibration_to_detector()
         self._status_var.set(f"Detecting: {Path(path).name}…")
         self.root.update()
         result = self._detector.detect(
@@ -3064,6 +3097,7 @@ class PupilTrackingGUI:
             manual_crop = self._get_manual_roi_crop(frame)
             if manual_crop is not None:
                 crop, roi_x, roi_y = manual_crop
+                self._sync_calibration_to_detector()
                 result = self._detector.detect_video_frame(
                     crop,
                     frame_number=self._frame_count,
@@ -3073,6 +3107,7 @@ class PupilTrackingGUI:
                 result = self._apply_manual_ring_policy(result)
                 result.metadata.source = source_name
             else:
+                self._sync_calibration_to_detector()
                 result = self._detector.detect(
                     frame,
                     frame_number=self._frame_count,

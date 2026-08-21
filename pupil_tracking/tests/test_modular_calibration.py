@@ -503,3 +503,90 @@ def test_pixel_geometry_unchanged_by_calibration():
     assert limbus.ellipse.semi_major == pre_major
     assert limbus.ellipse.semi_minor == pre_minor
 
+
+# ── Regression: set_calibration_mode must update StabilizedCalibrator
+# so the next detect() call uses the new mode, not the initial mode.
+
+def test_F_set_mode_updates_stabilized_calibrator():
+    """set_calibration_mode MUST change the mode seen by detect().
+
+    Regression test for the GUI race condition where the detector
+    continued to use ANATOMICAL_ANCHOR even after the user switched
+    to FIXED_PIXEL_SCALE via the settings UI.
+    """
+    from pupil_tracking.utils.config import get_config
+
+    cfg = get_config()
+    cal = StabilizedCalibrator(
+        config=cfg.measurement_stabilization,
+        corneal_diameter_mm=12.0,
+        mode=getattr(cfg.calibration, "mode", "ANATOMICAL_ANCHOR"),
+        manual_px_per_mm=getattr(cfg.calibration, "manual_px_per_mm", None),
+        ring_diameter_mm=getattr(cfg.calibration, "suction_ring_diameter_mm", 9.4),
+    )
+
+    assert cal.mode == "ANATOMICAL_ANCHOR"
+
+    limbus = LimbusDetection(
+        detected=True,
+        ellipse=EllipseParams(center_x=320, center_y=240, semi_major=225.0, semi_minor=220.0),
+        confidence=0.9,
+    )
+
+    # With ANATOMICAL_ANCHOR: smaj_mm = corneal/2 = 6.00
+    result_anat = cal.update_from_limbus(limbus)
+    assert result_anat.method == "anatomical"
+    assert pytest.approx(result_anat.mm_per_px * 225.0, abs=0.01) == 6.0
+
+    # Switch to FIXED_PIXEL_SCALE — mode MUST change immediately
+    cal.set_mode("FIXED_PIXEL_SCALE", manual_px_per_mm=45.0, corneal_diameter_mm=12.0)
+    assert cal.mode == "FIXED_PIXEL_SCALE"
+
+    result_fps = cal.update_from_limbus(limbus)
+    assert result_fps.method == "fixed_manual"
+    assert pytest.approx(result_fps.px_per_mm, abs=0.01) == 45.0
+    # smaj_mm = 225 / 45 = 5.00 (NOT 6.00)
+    assert pytest.approx(result_fps.mm_per_px * 225.0, abs=0.01) == 5.0
+
+
+def test_G_switching_modes_on_shared_detector():
+    """Switching modes on a single detector must produce different mm values.
+
+    Regression test: the GUI creates one UnifiedDetector at init, then the
+    user changes calibration mode via Settings. The *same* detector must
+    produce different mm values for different modes.
+    """
+    from pupil_tracking.utils.config import get_config
+    from pupil_tracking.core.detector import UnifiedDetector
+
+    cfg = get_config()
+    detector = UnifiedDetector(config=cfg)
+
+    # Start in default mode (ANATOMICAL_ANCHOR)
+    sc = detector._stabilized_cal
+    assert sc.mode == "ANATOMICAL_ANCHOR"
+
+    limbus = LimbusDetection(
+        detected=True,
+        ellipse=EllipseParams(center_x=320, center_y=240, semi_major=225.0, semi_minor=220.0),
+        confidence=0.9,
+    )
+
+    # ANATOMICAL: smaj_mm = 12/2 = 6.00
+    cal_anat = sc.update_from_limbus(limbus)
+    assert pytest.approx(cal_anat.mm_per_px * 225.0, abs=0.01) == 6.0
+
+    # Switch to FIXED_PIXEL_SCALE — via detector's set_calibration_mode
+    detector.set_calibration_mode("FIXED_PIXEL_SCALE", manual_px_per_mm=45.0, corneal_diameter_mm=12.0)
+    assert sc.mode == "FIXED_PIXEL_SCALE"
+
+    # smaj_mm = 225/45 = 5.00
+    cal_fps = sc.update_from_limbus(limbus)
+    assert pytest.approx(cal_fps.mm_per_px * 225.0, abs=0.01) == 5.0
+
+    # Switch back — values must revert
+    detector.set_calibration_mode("ANATOMICAL_ANCHOR", corneal_diameter_mm=12.0)
+    assert sc.mode == "ANATOMICAL_ANCHOR"
+    cal_back = sc.update_from_limbus(limbus)
+    assert pytest.approx(cal_back.mm_per_px * 225.0, abs=0.01) == 6.0
+
