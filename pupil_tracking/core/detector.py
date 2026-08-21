@@ -183,6 +183,9 @@ class UnifiedDetector:
         self._stabilized_cal = StabilizedCalibrator(
             config=self.cfg.measurement_stabilization,
             corneal_diameter_mm=corneal_mm,
+            mode=getattr(self.cfg.calibration, "mode", "ANATOMICAL_ANCHOR"),
+            manual_px_per_mm=getattr(self.cfg.calibration, "manual_px_per_mm", None),
+            ring_diameter_mm=getattr(self.cfg.calibration, "suction_ring_diameter_mm", 9.4),
         )
 
         # --- Video mode state ---
