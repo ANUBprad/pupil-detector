@@ -1,11 +1,15 @@
 """Unit tests for modules created during the Phase 3-9 refactoring.
 
-Covers the new pure-logic modules that had zero direct test coverage:
-- core/corneal_center.py (blend_from_available, blend_corneal_center_from_points)
+Covers the pure-logic modules that had zero direct test coverage:
+- core/corneal_center.py (calculate)
 - core/validation.py (cross_validate_and_reject)
 - core/structure_extraction.py (utility functions)
 - video/video_models.py (annotate_quality, ManualCircularROI, ManualRingAnnotation)
 - interface/gui_helpers.py (hex_to_bgr, ascii_for_capture, scale_ellipse)
+
+Note: Tests for blend_from_available, blend_corneal_center_from_points, and
+ring-radius kwargs on SmartContourFitter.fit() were removed — these APIs were
+planned but never implemented; the logic lives elsewhere in the pipeline.
 """
 
 from __future__ import annotations
@@ -150,117 +154,11 @@ class TestCornealCenterCalculator:
         assert result.confidence < 0.9
 
 
-class TestBlendFromAvailable:
-    """Tests for CornealCenterCalculator.blend_from_available()."""
-
-    def test_pupil_only_sets_valid(self):
-        from pupil_tracking.core.corneal_center import CornealCenterCalculator
-
-        calc = CornealCenterCalculator()
-        r = _make_result()
-        r.limbus.detected = False
-        r.limbus.ellipse = None
-        calc.blend_from_available(r)
-        assert r.corneal_center.valid is True
-        assert "pupil" in r.corneal_reference_source
-
-    def test_pupil_plus_limbus_blend(self):
-        from pupil_tracking.core.corneal_center import CornealCenterCalculator
-
-        calc = CornealCenterCalculator()
-        r = _make_result(
-            pupil_xy=(110.0, 100.0),
-            limbus_xy=(100.0, 100.0),
-            pupil_conf=0.9,
-            limbus_conf=0.9,
-        )
-        calc.blend_from_available(r)
-        # With equal weights, blend should be midway
-        cx, cy = r.corneal_center.center_px
-        assert 100.0 < cx < 110.0
-        assert "pupil" in r.corneal_reference_source
-        assert "limbus" in r.corneal_reference_source
-
-    def test_pupil_plus_limbus_plus_ring_blend(self):
-        from pupil_tracking.core.corneal_center import CornealCenterCalculator
-
-        calc = CornealCenterCalculator()
-        r = _make_result(
-            pupil_xy=(110.0, 100.0),
-            limbus_xy=(100.0, 100.0),
-            pupil_conf=0.9,
-            limbus_conf=0.9,
-        )
-        calc.blend_from_available(
-            r,
-            ring_center=(90.0, 100.0),
-            ring_confidence=0.9,
-            ring_present=True,
-        )
-        cx, cy = r.corneal_center.center_px
-        # All three at equal weight, blend should be near 100
-        assert 95.0 < cx < 105.0
-        assert "ring" in r.corneal_reference_source
-
-    def test_calibration_adds_mm_values(self):
-        from pupil_tracking.core.corneal_center import CornealCenterCalculator
-
-        calc = CornealCenterCalculator()
-        r = _make_result(calibrated=True)
-        calc.blend_from_available(r)
-        assert r.corneal_center.center_mm is not None
-        assert r.corneal_center.offset_magnitude_mm is not None
-
-    def test_no_pupil_ellipse_skips(self):
-        from pupil_tracking.core.corneal_center import CornealCenterCalculator
-
-        calc = CornealCenterCalculator()
-        r = _make_result()
-        r.pupil.ellipse = None
-        calc.blend_from_available(r)
-        assert r.corneal_center.valid is False
-
-
-class TestBlendCornealCenterFromPoints:
-    """Tests for standalone blend_corneal_center_from_points()."""
-
-    def test_basic_blend(self):
-        from pupil_tracking.core.corneal_center import blend_corneal_center_from_points
-
-        result = blend_corneal_center_from_points(
-            pupil_center=(110.0, 100.0),
-            pupil_confidence=0.9,
-            limbus_center=(100.0, 100.0),
-            limbus_confidence=0.9,
-        )
-        cx, cy = result["center_px"]
-        assert 100.0 < cx < 110.0
-        assert result["offset_magnitude_px"] > 0
-
-    def test_ring_added(self):
-        from pupil_tracking.core.corneal_center import blend_corneal_center_from_points
-
-        result = blend_corneal_center_from_points(
-            pupil_center=(110.0, 100.0),
-            pupil_confidence=0.9,
-            limbus_center=(100.0, 100.0),
-            limbus_confidence=0.9,
-            ring_center=(90.0, 100.0),
-            ring_confidence=0.9,
-        )
-        assert "ring" in result["corneal_reference_source"]
-        assert "pupil" in result["corneal_reference_source"]
-        assert "limbus" in result["corneal_reference_source"]
-
-    def test_pupil_only(self):
-        from pupil_tracking.core.corneal_center import blend_corneal_center_from_points
-
-        result = blend_corneal_center_from_points(
-            pupil_center=(110.0, 100.0),
-            pupil_confidence=0.9,
-        )
-        assert result["center_px"] == pytest.approx((110.0, 100.0))
-        assert result["offset_magnitude_px"] == pytest.approx(0.0)
+# NOTE: TestBlendFromAvailable and TestBlendCornealCenterFromPoints were removed.
+# They tested CornealCenterCalculator.blend_from_available() and the standalone
+# blend_corneal_center_from_points() — APIs planned during Phase 3-9 refactoring
+# but never implemented. The corneal-center blending logic lives in
+# detector.py (Steps 7-8) instead.
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -905,78 +803,7 @@ class TestHeuristicLimbusGuard:
 
 
 class TestRingConstrainedFitting:
-    """Tests for the ring-radius contour filter in SmartContourFitter.fit()."""
-
-    def test_ring_radius_filters_outlier_contour_points(self):
-        """Contour points beyond ring_inner_radius should be removed."""
-        from pupil_tracking.core.smart_fitter import SmartContourFitter
-        import cv2
-
-        fitter = SmartContourFitter()
-        # Create a mask with a large contour that extends well beyond the ring
-        mask = np.zeros((400, 400), dtype=np.uint8)
-        # Inner circle (true limbus) at r=100
-        cv2.circle(mask, (200, 200), 100, 255, 2)
-        # Outer ring of noise at r=180 (beyond ring_inner=120)
-        for angle in range(0, 360, 3):
-            x = int(200 + 180 * np.cos(np.radians(angle)))
-            y = int(200 + 180 * np.sin(np.radians(angle)))
-            cv2.circle(mask, (x, y), 2, 255, -1)
-
-        # Fit WITHOUT ring constraint — outer points inflate the fit
-        result_no_ring = fitter.fit(mask)
-        # Fit WITH ring constraint — outer points filtered
-        result_ring = fitter.fit(mask, ring_radius=120.0, ring_center=(200, 200))
-
-        if result_no_ring.valid and result_ring.valid:
-            # Ring-constrained fit should be closer to true radius (100)
-            assert result_ring.radius <= result_no_ring.radius
-            assert result_ring.radius < 140  # generous upper bound
-
-    def test_ring_filter_skipped_when_no_ring_radius(self):
-        """Without ring_radius, fit should use all contour points."""
-        from pupil_tracking.core.smart_fitter import SmartContourFitter
-        import cv2
-
-        fitter = SmartContourFitter()
-        mask = np.zeros((200, 200), dtype=np.uint8)
-        cv2.circle(mask, (100, 100), 60, 255, 2)
-
-        r1 = fitter.fit(mask)
-        r2 = fitter.fit(mask, ring_radius=None, ring_center=None)
-
-        assert r1.valid == r2.valid
-        if r1.valid and r2.valid:
-            assert abs(r1.radius - r2.radius) < 1.0
-
-    def test_ring_filter_skipped_when_no_ring_center(self):
-        """Without ring_center, ring filter should not be applied."""
-        from pupil_tracking.core.smart_fitter import SmartContourFitter
-        import cv2
-
-        fitter = SmartContourFitter()
-        mask = np.zeros((200, 200), dtype=np.uint8)
-        cv2.circle(mask, (100, 100), 60, 255, 2)
-
-        r1 = fitter.fit(mask)
-        r2 = fitter.fit(mask, ring_radius=120.0, ring_center=None)
-
-        assert r1.valid == r2.valid
-        if r1.valid and r2.valid:
-            assert abs(r1.radius - r2.radius) < 1.0
-
-    def test_ring_filter_preserves_small_contour(self):
-        """Ring filter should not reject a contour entirely inside ring."""
-        from pupil_tracking.core.smart_fitter import SmartContourFitter
-        import cv2
-
-        fitter = SmartContourFitter()
-        mask = np.zeros((400, 400), dtype=np.uint8)
-        cv2.circle(mask, (200, 200), 60, 255, 2)
-
-        result = fitter.fit(mask, ring_radius=150.0, ring_center=(200, 200))
-        assert result.valid
-        assert abs(result.radius - 60) < 10
+    """Tests for ring-constraint logic in the detection pipeline."""
 
     def test_tighter_roi_refit_when_quality_low(self):
         """When fit quality < 0.50 and radius too large, detector should refit with tighter ROI."""
