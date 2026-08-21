@@ -3850,6 +3850,168 @@ class PupilTrackingGUI:
             eye_result.metadata.image_height = H
             eye_result.metadata.frame_number = getattr(fr, "frame_number", 0)
             eye_result.metadata.latency_ms = getattr(fr, "latency_ms", fr.processing_ms)
+            # ── Override detector-internal calibration with GUI mode ──
+            # The internal UnifiedDetector's StabilizedCalibrator is stuck
+            # on ANATOMICAL_ANCHOR (never receives set_calibration_mode).
+            # Build the correct calibration from the GUI dropdown, then
+            # re-compute pre-computed mm attributes so to_dict() / CSV
+            # export reflect the user's selection.
+            _cal_mode = self._calibration_mode_var.get() if hasattr(self, "_calibration_mode_var") else "ANATOMICAL_ANCHOR"
+            _corneal_mm = float(self._corneal_ref_mm_var.get() if hasattr(self, "_corneal_ref_mm_var") else _CORNEAL_DIAMETER_MM)
+            _fixed_scale = float(self._fixed_scale_var.get() if hasattr(self, "_fixed_scale_var") else 44.5)
+            _ring_ref_mm = float(self._ring_ref_mm_var.get() if hasattr(self, "_ring_ref_mm_var") else 9.4)
+            if _cal_mode in ("FIXED_PIXEL_SCALE", "fixed_manual", "manual"):
+                _px = max(0.1, _fixed_scale)
+                new_cal = CalibrationInfo(
+                    calibrated=True,
+                    px_per_mm=_px,
+                    mm_per_px=1.0 / _px,
+                    source="fixed_manual",
+                    method="fixed_manual",
+                    reference_diameter_mm=0.0,
+                    reference_diameter_px=0.0,
+                    confidence=1.0,
+                    corneal_diameter_assumed_mm=None,
+                )
+            elif _cal_mode == "RING_REFLECTION":
+                _ring_r = getattr(fr, "ring_radius", None)
+                if _ring_r is not None and _ring_r > 10:
+                    _dia = _ring_r * 2.0
+                    _px = _dia / _ring_ref_mm
+                    new_cal = CalibrationInfo(
+                        calibrated=True,
+                        px_per_mm=_px,
+                        mm_per_px=1.0 / _px,
+                        source=f"ring_reflection_{_ring_ref_mm:.1f}mm",
+                        method="ring_reflection",
+                        reference_diameter_mm=_ring_ref_mm,
+                        reference_diameter_px=_dia,
+                        confidence=0.95,
+                        corneal_diameter_assumed_mm=None,
+                    )
+                elif (
+                    getattr(eye_result, "limbus", None) is not None
+                    and getattr(eye_result.limbus, "detected", False)
+                    and getattr(eye_result.limbus, "ellipse", None) is not None
+                ):
+                    _lsm = eye_result.limbus.ellipse.semi_major * 2.0
+                    _px = _lsm / _corneal_mm if _corneal_mm > 0 else 0.0
+                    new_cal = CalibrationInfo(
+                        calibrated=True,
+                        px_per_mm=_px,
+                        mm_per_px=1.0 / _px if _px > 0 else 0.0,
+                        source="limbus_semi_major (fallback)",
+                        method="anatomical",
+                        reference_diameter_mm=_corneal_mm,
+                        reference_diameter_px=_lsm,
+                        confidence=0.85,
+                        corneal_diameter_assumed_mm=_corneal_mm,
+                    )
+                else:
+                    new_cal = CalibrationInfo(
+                        calibrated=False,
+                        px_per_mm=0.0,
+                        mm_per_px=0.0,
+                        source="none",
+                        method="ring_reflection",
+                        reference_diameter_mm=0.0,
+                        reference_diameter_px=0.0,
+                        confidence=0.0,
+                        corneal_diameter_assumed_mm=None,
+                    )
+            else:
+                # ANATOMICAL_ANCHOR
+                if (
+                    getattr(eye_result, "limbus", None) is not None
+                    and getattr(eye_result.limbus, "detected", False)
+                    and getattr(eye_result.limbus, "ellipse", None) is not None
+                ):
+                    _lsm = eye_result.limbus.ellipse.semi_major * 2.0
+                    _px = _lsm / _corneal_mm if _corneal_mm > 0 else 0.0
+                    new_cal = CalibrationInfo(
+                        calibrated=True,
+                        px_per_mm=_px,
+                        mm_per_px=1.0 / _px if _px > 0 else 0.0,
+                        source="limbus_semi_major (optimised)",
+                        method="anatomical",
+                        reference_diameter_mm=_corneal_mm,
+                        reference_diameter_px=_lsm,
+                        confidence=min(0.95, getattr(eye_result, "overall_confidence", 0.0) + 0.05),
+                        corneal_diameter_assumed_mm=_corneal_mm,
+                    )
+                else:
+                    new_cal = CalibrationInfo(
+                        calibrated=False,
+                        px_per_mm=0.0,
+                        mm_per_px=0.0,
+                        source="none",
+                        method="anatomical",
+                        reference_diameter_mm=0.0,
+                        reference_diameter_px=0.0,
+                        confidence=0.0,
+                        corneal_diameter_assumed_mm=_corneal_mm,
+                    )
+            eye_result.calibration = new_cal
+            # Clear stale pre-computed mm attributes set by
+            # _add_mm_values / evaluate_clinical_wtw during the
+            # original detection with the wrong calibration.
+            for target in (
+                getattr(eye_result, "limbus", None),
+                getattr(eye_result, "pupil", None),
+            ):
+                if target is None:
+                    continue
+                for attr in (
+                    "wtw_horizontal_mm",
+                    "wtw_vertical_mm",
+                    "wtw_mean_mm",
+                    "wtw_astigmatism_mm",
+                    "is_wtw_measured",
+                    "wtw_validity_status",
+                    "radius_mm",
+                    "center_mm",
+                ):
+                    if hasattr(target, attr):
+                        try:
+                            setattr(target, attr, None)
+                        except Exception:
+                            pass
+            # Re-compute mm values with the correct calibration
+            if new_cal.calibrated:
+                if (
+                    getattr(eye_result, "pupil", None) is not None
+                    and eye_result.pupil.detected
+                    and eye_result.pupil.ellipse is not None
+                ):
+                    pe = eye_result.pupil.ellipse
+                    eye_result.pupil.radius_mm = pe.radius * new_cal.mm_per_px
+                    eye_result.pupil.center_mm = (
+                        pe.center_x * new_cal.mm_per_px,
+                        pe.center_y * new_cal.mm_per_px,
+                    )
+                if (
+                    getattr(eye_result, "limbus", None) is not None
+                    and eye_result.limbus.detected
+                    and eye_result.limbus.ellipse is not None
+                ):
+                    le = eye_result.limbus.ellipse
+                    eye_result.limbus.radius_mm = le.radius * new_cal.mm_per_px
+                    eye_result.limbus.center_mm = (
+                        le.center_x * new_cal.mm_per_px,
+                        le.center_y * new_cal.mm_per_px,
+                    )
+                    from pupil_tracking.calibration.spatial_calibration import (
+                        evaluate_clinical_wtw,
+                    )
+                    h, v, m, astig, is_m, status = evaluate_clinical_wtw(
+                        eye_result.limbus, new_cal,
+                    )
+                    eye_result.limbus.wtw_horizontal_mm = h
+                    eye_result.limbus.wtw_vertical_mm = v
+                    eye_result.limbus.wtw_mean_mm = m
+                    eye_result.limbus.wtw_astigmatism_mm = astig
+                    eye_result.limbus.is_wtw_measured = is_m
+                    eye_result.limbus.wtw_validity_status = status
             return eye_result
 
         cal_mode = self._calibration_mode_var.get() if hasattr(self, "_calibration_mode_var") else "ANATOMICAL_ANCHOR"
