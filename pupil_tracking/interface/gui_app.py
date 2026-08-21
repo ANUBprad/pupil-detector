@@ -1931,10 +1931,62 @@ class PupilTrackingGUI:
         # currently displayed result so the measurement panel updates
         # immediately (without requiring a new image load / detection).
         if "calibration" in reasons and self._current_result is not None:
+            res = self._current_result
             new_cal = self._detector._calibration if self._detector is not None else None
             if new_cal is not None and new_cal.calibrated:
-                self._current_result.calibration = new_cal
-                self._update_measurements(self._current_result)
+                res.calibration = new_cal
+            elif (
+                new_cal is not None
+                and not new_cal.calibrated
+                and getattr(res, "limbus", None) is not None
+                and getattr(res.limbus, "detected", False)
+                and getattr(res.limbus, "ellipse", None) is not None
+            ):
+                # ANATOMICAL_ANCHOR after reset: _current_best() returns
+                # uncalibrated because _ema_px_per_mm is None.  Compute
+                # the tautological calibration from the current result's
+                # pixel geometry so the panel shows correct values.
+                ep = res.limbus.ellipse
+                corneal_mm = float(self._corneal_ref_mm_var.get())
+                dia_px = ep.semi_major * 2.0
+                if dia_px > 10:
+                    res.calibration = CalibrationInfo(
+                        calibrated=True,
+                        px_per_mm=dia_px / corneal_mm,
+                        mm_per_px=corneal_mm / dia_px,
+                        source="anatomical_on_switch",
+                        method="anatomical",
+                        corneal_diameter_assumed_mm=corneal_mm,
+                    )
+            # Clear stale pre-computed mm attributes that were set by
+            # _add_mm_values / evaluate_clinical_wtw during the original
+            # detection.  These would otherwise be read by the display
+            # code and show values computed with the OLD calibration.
+            # (LimbusDetection/PupilDetection are dataclasses, so we
+            # reset fields to None rather than delattr which does not
+            # truly remove dataclass fields.)
+            for target in (
+                getattr(res, "limbus", None),
+                getattr(res, "pupil", None),
+            ):
+                if target is None:
+                    continue
+                for attr in (
+                    "wtw_horizontal_mm",
+                    "wtw_vertical_mm",
+                    "wtw_mean_mm",
+                    "wtw_astigmatism_mm",
+                    "is_wtw_measured",
+                    "wtw_validity_status",
+                    "radius_mm",
+                    "center_mm",
+                ):
+                    if hasattr(target, attr):
+                        try:
+                            setattr(target, attr, None)
+                        except Exception:
+                            pass
+            self._update_measurements(res)
 
     def _restart_active_stream(
         self, reason: str, rebuild_engine: bool = False
@@ -5494,14 +5546,13 @@ class PupilTrackingGUI:
                 and has_cal
             ):
                 le = limbus_res.ellipse
-                h_wtw = getattr(limbus_res, "wtw_horizontal_mm", None)
-                v_wtw = getattr(limbus_res, "wtw_vertical_mm", None)
-                m_wtw = getattr(limbus_res, "wtw_mean_mm", None)
-
-                if h_wtw is None:
-                    h_wtw = 2.0 * le.semi_major * mm_per_px
-                    v_wtw = 2.0 * le.semi_minor * mm_per_px
-                    m_wtw = (h_wtw + v_wtw) / 2.0
+                # Always recompute WTW from current pixel geometry and
+                # calibration.  Pre-computed attributes (set by
+                # _add_mm_values during detection) become stale when the
+                # calibration mode changes without a new detection.
+                h_wtw = 2.0 * le.semi_major * mm_per_px
+                v_wtw = 2.0 * le.semi_minor * mm_per_px
+                m_wtw = (h_wtw + v_wtw) / 2.0
 
                 self._wtw_vars["horizontal"].set(f"{h_wtw:.2f} mm")
                 self._wtw_vars["vertical"].set(f"{v_wtw:.2f} mm")
