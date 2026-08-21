@@ -1927,6 +1927,15 @@ class PupilTrackingGUI:
         )
         self._refresh_display()
 
+        # When calibration changes, re-compute mm values on the
+        # currently displayed result so the measurement panel updates
+        # immediately (without requiring a new image load / detection).
+        if "calibration" in reasons and self._current_result is not None:
+            new_cal = self._detector._calibration if self._detector is not None else None
+            if new_cal is not None and new_cal.calibrated:
+                self._current_result.calibration = new_cal
+                self._update_measurements(self._current_result)
+
     def _restart_active_stream(
         self, reason: str, rebuild_engine: bool = False
     ) -> None:
