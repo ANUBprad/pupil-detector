@@ -159,10 +159,14 @@ class IrisFeatureExtractor:
         - If the patch is strongly anisotropic (elongated) -> FURROW.
         - Otherwise -> TEXTURE.
         """
-        center = patch[1:4, 1:4]
+        # Centre window is the middle (2*radius_px+1) patch pixel, matching the
+        # indexing used in _local_measures (not a hard-coded top-left offset).
+        c0 = self.radius_px - 1
+        c1 = self.radius_px + 2
+        center = patch[c0:c1, c0:c1]
         c_mean = float(center.mean())
         surround = patch.copy()
-        surround[1:4, 1:4] = -1
+        surround[c0:c1, c0:c1] = -1
         s_vals = surround[surround >= 0]
         s_mean = float(s_vals.mean()) if s_vals.size else c_mean
 
@@ -196,6 +200,35 @@ class IrisFeatureExtractor:
         if n > 0:
             hist = hist / n
         return hist
+
+    def _local_visibility(
+        self,
+        usable_mask: np.ndarray,
+        x: float,
+        y: float,
+    ) -> float:
+        """Fraction of usable (non-occluded / non-reflective) pixels in the
+        feature's local patch neighbourhood, in ``[0, 1]``.
+
+        The feature's own center pixel is guaranteed usable by the extraction
+        gate, but its surrounding patch may be partially occluded or specular;
+        this reports how much of that patch is actually visible.
+        """
+        h, w = usable_mask.shape[:2]
+        x0 = int(round(x))
+        y0 = int(round(y))
+        r = int(self.radius_px)
+        ys = max(0, y0 - r)
+        ye = min(h, y0 + r + 1)
+        xs = max(0, x0 - r)
+        xe = min(w, x0 + r + 1)
+        if ys >= ye or xs >= xe:
+            return 1.0
+        patch = usable_mask[ys:ye, xs:xe]
+        total = patch.size
+        if total == 0:
+            return 1.0
+        return float(np.count_nonzero(patch) / total)
 
     def extract(
         self,
@@ -269,7 +302,7 @@ class IrisFeatureExtractor:
                         feature_type=feat_type,
                         response=float(response),
                         local_contrast=float(local_contrast),
-                        visibility=float(usable_mask[yi, xi]),
+                        visibility=self._local_visibility(usable_mask, x, y),
                         confidence=float(confidence),
                         valid=True,
                         descriptor=descriptor,

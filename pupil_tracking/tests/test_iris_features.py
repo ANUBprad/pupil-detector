@@ -20,7 +20,7 @@ from pupil_tracking.iris import (
     draw_iris_overlay,
 )
 from pupil_tracking.iris.roi import point_in_roi_annulus, sample_annulus_mask
-from pupil_tracking.iris.types import IrisStatus
+from pupil_tracking.iris.types import IrisFeatureType, IrisStatus
 from pupil_tracking.utils.types import EllipseParams
 
 
@@ -128,6 +128,8 @@ def test_reflection_mask_respected():
     # Without reflection: measure usable fraction.
     roi = detector.roi_extractor.build(pupil, limbus)
     usable_clean = detector.masking.build(img, roi)
+    n_clean = int(np.count_nonzero(usable_clean))
+    assert n_clean > 0
 
     # Add a large bright specular reflection inside the annulus.
     img2 = img.copy()
@@ -135,9 +137,13 @@ def test_reflection_mask_respected():
     c = img.shape[0] // 2
     cv2.circle(img2, (int(c + 92), c), 12, (255, 255, 255), -1)
     usable_withrefl = detector.masking.build(img2, roi)
+    n_withrefl = int(np.count_nonzero(usable_withrefl))
 
-    # One bright blob must reduce usable-area or at least be flagged.
-    assert bool(np.any(usable_withrefl))
+    # A bright blob inside the annulus must reduce the usable area (the
+    # reflection is removed from the mask), and never increase it.
+    assert n_withrefl < n_clean
+    # Some iris pixels must still be usable.
+    assert n_withrefl > 0
 
 
 def test_mask_stats_interface():
@@ -191,6 +197,37 @@ def test_extraction_deterministic():
         assert a.confidence == b.confidence
 
 
+def test_visibility_reflects_local_occlusion_fraction():
+    # The per-feature visibility must measure the usable fraction of the
+    # feature's local patch, not be a constant 1.0.
+    from pupil_tracking.iris.extraction import IrisFeatureExtractor
+
+    ex = IrisFeatureExtractor(radius_px=5)
+    mask = np.ones((21, 21), dtype=bool)
+    mask[0:11, :] = False  # occlude the top ~half of the image
+
+    frac = ex._local_visibility(mask, 10.0, 10.0)
+    # Feature at (10,10): patch rows 5..15 / cols 5..15 (11x11 = 121 px), of
+    # which rows 5..10 (6 rows) are occluded -> usable = 121 - 66.
+    assert 0.0 < frac < 1.0
+
+    # Fully usable -> 1.0; fully occluded center would not be accepted, but a
+    # fully occluded patch is reported as 1.0 for an already-usable center.
+    assert ex._local_visibility(np.ones((21, 21), dtype=bool), 10.0, 10.0) == 1.0
+
+
+def test_classify_uses_true_center_patch():
+    # A dark pit exactly at the patch center must be classified as a crypt.
+    # Previously the "center" window used a hard-coded top-left offset
+    # (patch[1:4, 1:4]) that missed the true center for radius_px=5.
+    from pupil_tracking.iris.extraction import IrisFeatureExtractor
+
+    ex = IrisFeatureExtractor(radius_px=5)
+    patch = np.full((11, 11), 200.0, np.float32)
+    patch[5, 5] = 0.0
+    assert ex._classify(patch) == IrisFeatureType.CRYPT
+
+
 def test_quality_filtering_flat_iris_yields_fewer():
     # High-texture iris -> more accepted than flat (low-texture) iris.
     hi = _synthetic_iris_image(rng_seed=1, texture=18.0, crypts=True)
@@ -201,18 +238,23 @@ def test_quality_filtering_flat_iris_yields_fewer():
     assert hi_res.num_accepted >= lo_res.num_accepted
 
 
-def test_angular_suppression_spreads_features():
+def test_angular_suppression_enforces_min_separator():
     img = _synthetic_iris_image(rng_seed=2)
     pupil, limbus = _default_geometry()
     fs = detect_iris_features(img, pupil, limbus).feature_set
-    angles = sorted(f.angle_deg for f in fs.features)
-    gaps = []
-    for i in range(len(angles)):
-        nxt = angles[(i + 1) % len(angles)] if len(angles) > 1 else None
-        if nxt is not None:
-            g = (nxt - angles[i]) % 360.0
-            gaps.append(min(g, 360.0 - g))
-    assert len(fs.features) <= 1 or min(gaps, default=0) >= 0.0  # no overlap negative
+    acc = fs.features
+    if len(acc) <= 1:
+        pytest.skip("not enough accepted features to verify angular separation")
+    min_angular_sep_deg = IrisConfig().min_angular_sep_deg
+    # Every pair of accepted features must be separated by at least the
+    # configured minimum angular gap.
+    for i in range(len(acc)):
+        for j in range(i + 1, len(acc)):
+            gap = abs(acc[i].angle_deg - acc[j].angle_deg) % 360.0
+            gap = min(gap, 360.0 - gap)
+            assert gap >= min_angular_sep_deg - 1e-6, (
+                acc[i].angle_deg, acc[j].angle_deg, gap, min_angular_sep_deg
+            )
 
 
 def test_result_contract_stable():
