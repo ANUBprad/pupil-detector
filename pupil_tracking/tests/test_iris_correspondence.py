@@ -19,6 +19,7 @@ from pupil_tracking.iris.correspondence import (
     Correspondence,
     CorrespondenceConfig,
     _estimate_consensus,
+    _estimate_global_consistency,
     _estimate_ransac_exhaustive,
     _estimate_weighted_circular,
     angular_span,
@@ -406,3 +407,147 @@ def test_ncc_refinement_deterministic(eye_src, eye_geo, feats_a):
     assert r1.estimated_rotation_deg == r2.estimated_rotation_deg
     assert r1.failure == r2.failure
     assert r1.refined_used == r2.refined_used
+
+
+# --------------------------------------------------------------------------- #
+# Global spatial consistency tests
+# --------------------------------------------------------------------------- #
+
+def _gc_cfg():
+    return CorrespondenceConfig()
+
+
+def test_global_consistency_identity():
+    """All estimates at 0° -> returns 0° with high inlier fraction."""
+    thetas = np.array([0.0, 0.0, 0.0, 0.0, 0.0])
+    weights = np.array([1.0, 1.0, 1.0, 1.0, 1.0])
+    theta_hat, info = _estimate_global_consistency(thetas, weights, _gc_cfg())
+    assert circular_distance(theta_hat, 0.0) < 0.5
+    assert info["global_inlier_count"] == 5
+    assert info["global_inlier_frac"] == 1.0
+
+
+def test_global_consistency_positive_rotation():
+    """All estimates at 30° -> returns ~30°."""
+    thetas = np.array([30.0, 30.0, 30.0, 30.5, 29.5])
+    weights = np.array([1.0, 1.0, 1.0, 1.0, 1.0])
+    theta_hat, info = _estimate_global_consistency(thetas, weights, _gc_cfg())
+    assert circular_distance(theta_hat, 30.0) < 1.0
+    assert info["global_inlier_count"] == 5
+
+
+def test_global_consistency_negative_rotation():
+    """Estimates at 357° (= -3°) -> returns ~357°."""
+    thetas = np.array([357.0, 357.5, 356.5, 357.0])
+    weights = np.array([1.0, 1.0, 1.0, 1.0])
+    theta_hat, info = _estimate_global_consistency(thetas, weights, _gc_cfg())
+    assert circular_distance(theta_hat, 357.0) < 1.0
+
+
+def test_global_consistency_wraparound():
+    """Estimates near 0/360 boundary -> returns correct wraparound."""
+    thetas = np.array([359.0, 0.5, 1.0, 359.5, 0.0])
+    weights = np.array([1.0, 1.0, 1.0, 1.0, 1.0])
+    theta_hat, info = _estimate_global_consistency(thetas, weights, _gc_cfg())
+    assert circular_distance(theta_hat, 0.0) < 2.0
+
+
+def test_global_consistency_outlier_rejection():
+    """One outlier at 180° should not shift the estimate."""
+    thetas = np.array([10.0, 10.5, 9.5, 10.0, 180.0])
+    weights = np.array([1.0, 1.0, 1.0, 1.0, 1.0])
+    theta_hat, info = _estimate_global_consistency(thetas, weights, _gc_cfg())
+    assert circular_distance(theta_hat, 10.0) < 1.0
+    assert info["global_inlier_count"] == 4
+    assert info["global_inlier_frac"] == 0.8
+
+
+def test_global_consistency_sparse_features():
+    """3 estimates -> still returns a reasonable estimate."""
+    thetas = np.array([45.0, 45.5, 44.5])
+    weights = np.array([1.0, 1.0, 1.0])
+    theta_hat, info = _estimate_global_consistency(thetas, weights, _gc_cfg())
+    assert circular_distance(theta_hat, 45.0) < 1.0
+    assert info["global_inlier_count"] >= 2
+
+
+def test_global_consistency_competing_clusters():
+    """Two clusters: the larger one wins."""
+    thetas = np.array([10.0, 10.5, 9.5, 10.0,   # cluster at 10°
+                        50.0, 50.5, 49.5])         # cluster at 50°
+    weights = np.array([1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0])
+    theta_hat, info = _estimate_global_consistency(thetas, weights, _gc_cfg())
+    assert circular_distance(theta_hat, 10.0) < 2.0
+
+
+def test_global_consistency_degenerate_empty():
+    """Empty thetas -> returns 0°."""
+    thetas = np.array([], dtype=float)
+    weights = np.array([], dtype=float)
+    theta_hat, info = _estimate_global_consistency(thetas, weights, _gc_cfg())
+    assert theta_hat == 0.0
+    assert info["global_inlier_count"] == 0
+
+
+def test_global_consistency_degenerate_single():
+    """Single estimate -> returns that estimate."""
+    thetas = np.array([42.0])
+    weights = np.array([1.0])
+    theta_hat, info = _estimate_global_consistency(thetas, weights, _gc_cfg())
+    assert circular_distance(theta_hat, 42.0) < 0.1
+
+
+def test_global_consistency_weighted():
+    """Higher-weight estimates pull the peak toward them."""
+    thetas = np.array([10.0, 10.0, 20.0])  # 2 votes at 10, 1 at 20
+    weights = np.array([5.0, 5.0, 1.0])    # 10° has 10x weight
+    theta_hat, info = _estimate_global_consistency(thetas, weights, _gc_cfg())
+    assert circular_distance(theta_hat, 10.0) < 2.0
+
+
+def test_global_consistency_deterministic():
+    """Repeated call yields identical results."""
+    thetas = np.array([15.0, 15.5, 14.5, 16.0])
+    weights = np.array([1.0, 1.0, 1.0, 1.0])
+    t1, i1 = _estimate_global_consistency(thetas, weights, _gc_cfg())
+    t2, i2 = _estimate_global_consistency(thetas, weights, _gc_cfg())
+    assert t1 == t2
+    assert i1 == i2
+
+
+def test_global_hybrid_method_selectable():
+    """estimate_correspondence accepts rotation_method='global_hybrid'."""
+    pe = EllipseParams(center_x=100, center_y=100, semi_major=30,
+                       semi_minor=28, angle_deg=0)
+    le = EllipseParams(center_x=100, center_y=100, semi_major=90,
+                       semi_minor=85, angle_deg=0)
+    roi = IrisROI(valid=True, center_x=100, center_y=100,
+                  pupil_semi_major=30, pupil_semi_minor=28,
+                  limbus_semi_major=90, limbus_semi_minor=85,
+                  pupil_radius_px=29, limbus_radius_px=87)
+    fs = IrisFeatureSet(roi=roi, features=[
+        IrisFeature(id=0, x=100, y=50, angle_deg=0, radial_norm=0.5,
+                    confidence=0.8, descriptor=np.ones(16, dtype=np.float32)/16),
+        IrisFeature(id=1, x=150, y=100, angle_deg=90, radial_norm=0.5,
+                    confidence=0.8, descriptor=np.ones(16, dtype=np.float32)/16),
+        IrisFeature(id=2, x=100, y=150, angle_deg=180, radial_norm=0.5,
+                    confidence=0.8, descriptor=np.ones(16, dtype=np.float32)/16),
+        IrisFeature(id=3, x=50, y=100, angle_deg=270, radial_norm=0.5,
+                    confidence=0.8, descriptor=np.ones(16, dtype=np.float32)/16),
+    ])
+    # Create a simple rotated image
+    import cv2
+    img = np.zeros((200, 200), dtype=np.uint8)
+    cv2.circle(img, (100, 100), 85, 128, -1)
+    cv2.circle(img, (100, 100), 29, 64, -1)
+    img_bgr = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+    # Rotate by 10°
+    M = cv2.getRotationMatrix2D((100, 100), 10, 1.0)
+    img_rot = cv2.warpAffine(img_bgr, M, (200, 200))
+    res = estimate_correspondence(
+        img_bgr, img_rot, fs, fs,
+        config=CorrespondenceConfig(refine=False),
+        rotation_method="global_hybrid",
+    )
+    assert "global_hybrid" in res.rotation_estimates
+    assert res.global_inlier_count >= 0

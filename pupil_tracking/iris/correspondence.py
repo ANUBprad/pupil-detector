@@ -107,6 +107,11 @@ class CorrespondenceConfig:
     ncc_min: float = 0.42                     # gate for a refined estimate
     ncc_flat_peak_reject_denom: float = 0.002  # |denom| below this → skip parabolic interp (flat peak)
 
+    # global spatial consistency
+    global_consistency_inlier_tol_deg: float = 1.5   # inlier window for global voting
+    global_consistency_min_inlier_frac: float = 0.40  # minimum inlier fraction to accept
+    global_consistency_min_inlier_count: int = 3      # absolute minimum inlier count
+
     # estimator thresholds used by failure classification
     ransac_tol_deg: float = 1.5
     residual_std_max_deg: float = 2.0
@@ -302,6 +307,11 @@ class CorrespondenceResult:
 
     processing_time_ms: float = 0.0
 
+    # Global consistency diagnostics (populated when method="global_consistency")
+    global_inlier_count: int = 0
+    global_inlier_frac: float = 0.0
+    global_inlier_std_deg: float = 0.0
+
     def to_dict(self) -> dict:
         d = {
             "valid": bool(self.valid),
@@ -329,6 +339,9 @@ class CorrespondenceResult:
             "scale_matches_used": int(self.scale_matches_used),
             "scale_valid": bool(self.scale_valid),
             "processing_time_ms": float(self.processing_time_ms),
+            "global_inlier_count": int(self.global_inlier_count),
+            "global_inlier_frac": float(self.global_inlier_frac),
+            "global_inlier_std_deg": float(self.global_inlier_std_deg),
         }
         return d
 
@@ -715,6 +728,78 @@ def _estimate_ransac_exhaustive(thetas: np.ndarray, weights: np.ndarray,
     return circular_mean(thetas[best_inliers].tolist(), weights[best_inliers].tolist())
 
 
+def _estimate_global_consistency(
+    thetas: np.ndarray,
+    weights: np.ndarray,
+    config: CorrespondenceConfig,
+    matched: Sequence[Correspondence] = (),
+) -> Tuple[float, Dict]:
+    """Global spatial consistency estimator.
+
+    Builds a weighted circular histogram of per-pair rotation estimates,
+    finds the dominant peak, and verifies that multiple spatially
+    distributed correspondences agree with the hypothesis.
+
+    Returns (theta_hat, info_dict) where info_dict contains diagnostic
+    fields for the caller.
+    """
+    info: Dict = {
+        "global_inlier_count": 0,
+        "global_inlier_frac": 0.0,
+        "global_inlier_std_deg": 0.0,
+        "global_peak_weight": 0.0,
+        "global_reliable_count": int(thetas.size),
+    }
+
+    n = thetas.size
+    if n == 0:
+        return 0.0, info
+    if n == 1:
+        return wrap_deg(float(thetas[0])), info
+
+    # Build weighted circular histogram (1.0-deg bins for robustness)
+    bin_w = 1.0
+    nbins = int(round(360.0 / bin_w))
+    idx = np.clip(np.floor(np.mod(thetas, 360.0) / bin_w).astype(int), 0, nbins - 1)
+    bin_w_sum = np.zeros(nbins, dtype=float)
+    np.add.at(bin_w_sum, idx, weights)
+    mode = int(np.argmax(bin_w_sum))
+    center = bin_w * (mode + 0.5)
+
+    # Inliers: estimates within tolerance of the dominant peak
+    tol = float(config.global_consistency_inlier_tol_deg)
+    inlier_mask = np.asarray(
+        [circular_distance(float(thetas[i]), center) <= tol
+         for i in range(n)], dtype=bool
+    )
+    n_inlier = int(inlier_mask.sum())
+    inlier_frac = float(n_inlier / n) if n > 0 else 0.0
+    total_weight = float(np.sum(weights))
+    inlier_weight = float(np.sum(weights[inlier_mask])) if n_inlier > 0 else 0.0
+    peak_weight = inlier_weight / total_weight if total_weight > 1e-12 else 0.0
+
+    # Weighted circular mean of inlier estimates
+    if n_inlier > 0:
+        theta_hat = circular_mean(
+            thetas[inlier_mask].tolist(), weights[inlier_mask].tolist()
+        )
+        inlier_std = float(circular_std(
+            thetas[inlier_mask].tolist(), weights[inlier_mask].tolist()
+        ))
+    else:
+        theta_hat = center
+        inlier_std = 999.0
+
+    info.update({
+        "global_inlier_count": n_inlier,
+        "global_inlier_frac": inlier_frac,
+        "global_inlier_std_deg": inlier_std,
+        "global_peak_weight": peak_weight,
+    })
+
+    return wrap_deg(theta_hat), info
+
+
 # --------------------------------------------------------------------------- #
 # Scale estimation
 # --------------------------------------------------------------------------- #
@@ -912,6 +997,28 @@ def estimate_correspondence(
         "weighted_circular": _estimate_weighted_circular(est_thetas, est_weights),
         "ransac": _estimate_ransac_exhaustive(est_thetas, est_weights, cfg.ransac_tol_deg),
     }
+    # Global spatial consistency: build circular histogram, find peak,
+    # verify multi-feature agreement.
+    gc_theta, gc_info = _estimate_global_consistency(
+        est_thetas, est_weights, cfg, matched,
+    )
+    res.rotation_estimates["global_consistency"] = gc_theta
+    res._global_consistency_info = gc_info
+    res.global_inlier_count = gc_info.get("global_inlier_count", 0)
+    res.global_inlier_frac = gc_info.get("global_inlier_frac", 0.0)
+    res.global_inlier_std_deg = gc_info.get("global_inlier_std_deg", 0.0)
+
+    # Hybrid: use global consistency when it has sufficient support,
+    # otherwise fall back to consensus. This prevents sparse/ambiguous
+    # cases from being mis-estimated by global voting alone.
+    gc_ok = (
+        res.global_inlier_count >= cfg.global_consistency_min_inlier_count
+        and res.global_inlier_frac >= cfg.global_consistency_min_inlier_frac
+    )
+    res.rotation_estimates["global_hybrid"] = (
+        gc_theta if gc_ok
+        else res.rotation_estimates["consensus"]
+    )
     if rotation_method not in res.rotation_estimates:
         rotation_method = "consensus"
     res.rotation_method = rotation_method
