@@ -105,6 +105,7 @@ class CorrespondenceConfig:
     refine_half_rad: float = 0.09             # half width of the radial window
     refine_n_rad: int = 5                     # samples across the radial window
     ncc_min: float = 0.42                     # gate for a refined estimate
+    ncc_flat_peak_reject_denom: float = 0.002  # |denom| below this → skip parabolic interp (flat peak)
 
     # estimator thresholds used by failure classification
     ransac_tol_deg: float = 1.5
@@ -537,6 +538,7 @@ def _refine_batch(
     gray_b: np.ndarray, roi_b: IrisROI,
     matched: Sequence[Correspondence],
     config: CorrespondenceConfig,
+    coarse_rotation_deg: float = 0.0,
 ) -> None:
     """Refine every match in one vectorised pass (mutates the records).
 
@@ -548,6 +550,18 @@ def _refine_batch(
     ``refine_edge_gate_deg`` of the grid's absolute end is unreliable (the true
     correlation lies farther away than the searched window) and is rejected by
     forcing NCC to 0 -- a real alignment therefore always lands in the interior.
+
+    When ``coarse_rotation_deg`` is provided the A-side search centre is
+    shifted by the coarse residual for each match so that NCC refinement
+    operates in the basin of the coarse estimate rather than around zero
+    offset.
+
+    A *flat-peak gate* is applied to parabolic refinement: when the absolute
+    curvature of the NCC parabola (``|denom|``) falls below
+    ``config.ncc_flat_peak_reject_denom``, the parabolic interpolation is
+    skipped and the raw grid-argmax offset is used instead.  On flat peaks the
+    parabola is unreliable and its correction can inject spurious sub-degree
+    bias; the raw argmax is more conservative and avoids this.
     """
     M = len(matched)
     if M == 0:
@@ -567,6 +581,13 @@ def _refine_batch(
     b_angles = np.asarray([wrap_deg(mt.angle_b) for mt in matched], dtype=float)
     b_rad = np.asarray([mt.radial_b for mt in matched], dtype=float)
 
+    # Compute coarse residual per match and shift A-side search centre.
+    if coarse_rotation_deg != 0.0:
+        raw_diff = (a_angles - b_angles) % 360.0
+        residuals = (raw_diff - coarse_rotation_deg) % 360.0
+        residuals[residuals > 180.0] -= 360.0
+        a_angles = (a_angles - residuals) % 360.0
+
     centers = a_angles[:, None, None] + offs[None, None, :]     # (M, 1, N)
     wins_a = _sample_windows_many(gray_a, roi_a, centers, a_rad, config)
     wins_b = _sample_windows_many(gray_b, roi_b, b_angles[:, None, None], b_rad,
@@ -584,7 +605,7 @@ def _refine_batch(
             a1 = float(ncc[i, j])
             a2 = float(ncc[i, j + 1])
             denom = a0 - 2.0 * a1 + a2
-            if abs(denom) > 1e-12:
+            if abs(denom) > config.ncc_flat_peak_reject_denom:
                 delta = 0.5 * (a0 - a2) / denom
                 if abs(delta) <= 1.0:
                     t_star = float(offs[j] + delta * step)
@@ -857,7 +878,8 @@ def estimate_correspondence(
 
     # sub-lattice refinement
     if cfg.refine:
-        _refine_batch(gray_a, roi_a, gray_b, roi_b, matched, cfg)
+        _refine_batch(gray_a, roi_a, gray_b, roi_b, matched, cfg,
+                       coarse_rotation_deg=best["d"])
         refined = [m for m in matched if m.ncc is not None]
         res.refined_used = len(refined)
         if refined:

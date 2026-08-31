@@ -336,7 +336,7 @@ def test_matching_is_one_to_one_and_deterministic(eye_src, eye_geo, feats_a):
 # ── nuisance perturbations on top of a rotation ────────────────────────
 
 def test_reflection_and_occlusion_perturbed_pairs_deterministic(eye_src, eye_geo,
-                                                              feats_a):
+                                                               feats_a):
     for kind in ("reflection", "occlusion"):
         pair, feats_b = _feats_b(eye_src, eye_geo, PairConfig(
             rotation_deg=3.0, perturbation=kind, seed=5))
@@ -350,3 +350,59 @@ def test_reflection_and_occlusion_perturbed_pairs_deterministic(eye_src, eye_geo
         # explicitly -- never a confident wrong-rotation OK.
         if o1.failure == FailureKind.OK:
             assert circular_distance(o1.estimated_rotation_deg, 3.0) <= 0.5
+
+
+# ── Phase VIII-B: NCC flat-peak gate regression tests ──────────────────
+
+def test_coarse_basin_negative_rotation(eye_src, eye_geo, feats_a):
+    """Correct coarse + negative rotation: coarse basin centres the search."""
+    out = _build_pair(eye_src, eye_geo, feats_a, PairConfig(rotation_deg=-5.0))
+    assert out["failure"] == "OK"
+    assert out["min_circular_diff_deg"] <= 1.0
+    assert abs(out["estimated_rotation_deg"] - 355.0) <= 1.0
+
+
+def test_coarse_basin_positive_rotation(eye_src, eye_geo, feats_a):
+    """Correct coarse + positive lattice rotation: NCC refines around basin."""
+    out = _build_pair(eye_src, eye_geo, feats_a, PairConfig(rotation_deg=5.0))
+    assert out["failure"] == "OK"
+    assert out["refined_used"] > 0
+    assert out["min_circular_diff_deg"] <= 0.5
+
+
+def test_wraparound_359_deg_coarse_basin(eye_src, eye_geo, feats_a):
+    """359 deg wraps to -1: coarse basin must handle circular boundary."""
+    out = _build_pair(eye_src, eye_geo, feats_a, PairConfig(rotation_deg=359.0))
+    assert out["failure"] == "OK"
+    assert out["min_circular_diff_deg"] <= 0.5
+
+
+def test_subdegree_ncc_correction_preserved(eye_src, eye_geo, feats_a):
+    """Small legitimate sub-degree NCC correction is not suppressed."""
+    out = _build_pair(eye_src, eye_geo, feats_a, PairConfig(rotation_deg=0.5))
+    assert out["failure"] == "OK"
+    assert out["refined_used"] > 0
+    assert out["min_circular_diff_deg"] <= 0.5
+
+
+def test_weak_ncc_preserves_coarse_basin(eye_src, eye_geo, feats_a):
+    """When NCC evidence is weak (content mismatch), the coarse basin is
+    not forced to produce an OK result -- honest rejection is expected."""
+    pe, le = eye_geo
+    other = detect_iris_features(_synthetic_iris_bgr(rng_seed=99), pe, le)
+    out = evaluate_pair(eye_src, _synthetic_iris_bgr(rng_seed=99),
+                        feats_a, other.feature_set, gt_rotation_deg=0.0,
+                        gt_scale=1.0)
+    assert out["failure"] != "OK"
+
+
+def test_ncc_refinement_deterministic(eye_src, eye_geo, feats_a):
+    """Repeated identical pair yields identical rotation estimate."""
+    config = PairConfig(rotation_deg=3.0)
+    pair1, fb1 = _feats_b(eye_src, eye_geo, config)
+    r1 = estimate_correspondence(eye_src, pair1.image_b, feats_a, fb1)
+    pair2, fb2 = _feats_b(eye_src, eye_geo, config)
+    r2 = estimate_correspondence(eye_src, pair2.image_b, feats_a, fb2)
+    assert r1.estimated_rotation_deg == r2.estimated_rotation_deg
+    assert r1.failure == r2.failure
+    assert r1.refined_used == r2.refined_used
