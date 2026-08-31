@@ -293,18 +293,25 @@ def test_too_few_matches_reports_degeneracy():
 
 
 def test_ambiguous_pair_flagged_low_ambiguity_sparse_ok():
-    cfg = CorrespondenceConfig(refine=False)
+    cfg_gate = CorrespondenceConfig(refine=False, evidence_gate=True)
+    cfg_no_gate = CorrespondenceConfig(refine=False, evidence_gate=False)
     blank = np.zeros((320, 320, 3), dtype=np.uint8)
-    # dense A and B grids: several A features race for each B in the corridors
+    # concentrated A and B grids: 4 features within 1.5 deg -> LOW_EVIDENCE
+    # (insufficient angular coverage for reliable estimation)
     dense_a = _mini_fset([_mini_feature(a, int(4 * a)) for a in (0.0, 0.5, 1.0, 1.5)])
     dense_b = _mini_fset([_mini_feature(a, int(4 * a)) for a in (0.2, 0.7, 1.2, 1.7)])
-    res_dense = estimate_correspondence(blank, blank, dense_a, dense_b, config=cfg)
-    assert res_dense.failure == FailureKind.AMBIGUOUS
-    assert res_dense.ambiguity_ratio > cfg.ambiguity_ratio_max
-    # well-separated control has no ambiguity
+    res_dense = estimate_correspondence(blank, blank, dense_a, dense_b, config=cfg_gate)
+    assert res_dense.failure == FailureKind.LOW_EVIDENCE
+    assert res_dense.feature_count == 4
+    assert res_dense.angular_coverage_ratio < 0.01
+    # without gate, same case hits AMBIGUOUS
+    res_no_gate = estimate_correspondence(blank, blank, dense_a, dense_b, config=cfg_no_gate)
+    assert res_no_gate.failure == FailureKind.AMBIGUOUS
+    # well-separated control passes the evidence gate
     sparse_a = _mini_fset([_mini_feature(a, int(a)) for a in (0.0, 30.0, 60.0, 90.0)])
     sparse_b = _mini_fset([_mini_feature(a, int(a)) for a in (0.0, 30.0, 60.0, 90.0)])
-    res_sparse = estimate_correspondence(blank, blank, sparse_a, sparse_b, config=cfg)
+    res_sparse = estimate_correspondence(blank, blank, sparse_a, sparse_b, config=cfg_gate)
+    assert res_sparse.failure != FailureKind.LOW_EVIDENCE
     assert res_sparse.ambiguity_ratio == pytest.approx(0.0)
 
 
@@ -551,3 +558,119 @@ def test_global_hybrid_method_selectable():
     )
     assert "global_hybrid" in res.rotation_estimates
     assert res.global_inlier_count >= 0
+
+
+# ------------------------------------------------------------------ #
+# Sparse-feature metrics tests
+# ------------------------------------------------------------------ #
+
+def test_compute_feature_metrics_empty():
+    from pupil_tracking.iris.correspondence import compute_feature_metrics
+    m = compute_feature_metrics([])
+    assert m["feature_count"] == 0
+    assert m["angular_span"] == 0.0
+    assert m["largest_angular_gap"] == 360.0
+    assert m["angular_coverage_ratio"] == 0.0
+    assert m["occupied_angular_bins_30"] == 0
+
+
+def test_compute_feature_metrics_single():
+    from pupil_tracking.iris.correspondence import compute_feature_metrics
+    f = _mini_feature(45.0, 0)
+    m = compute_feature_metrics([f])
+    assert m["feature_count"] == 1
+    assert m["angular_span"] == 0.0
+    assert m["angular_coverage_ratio"] == 0.0
+
+
+def test_compute_feature_metrics_evenly_spread():
+    from pupil_tracking.iris.correspondence import compute_feature_metrics
+    feats = [_mini_feature(a, i) for i, a in enumerate([0, 90, 180, 270])]
+    m = compute_feature_metrics(feats)
+    assert m["feature_count"] == 4
+    assert m["angular_span"] == pytest.approx(270.0)
+    assert m["angular_coverage_ratio"] == pytest.approx(0.75)
+    assert m["occupied_angular_bins_30"] == 4
+
+
+def test_compute_feature_metrics_concentrated():
+    from pupil_tracking.iris.correspondence import compute_feature_metrics
+    feats = [_mini_feature(a, i) for i, a in enumerate([0, 1, 2, 3])]
+    m = compute_feature_metrics(feats)
+    assert m["feature_count"] == 4
+    assert m["angular_span"] == pytest.approx(3.0)
+    assert m["angular_coverage_ratio"] == pytest.approx(3.0 / 360.0)
+    assert m["occupied_angular_bins_30"] == 1
+
+
+def test_compute_feature_metrics_wraparound():
+    from pupil_tracking.iris.correspondence import compute_feature_metrics
+    feats = [_mini_feature(a, i) for i, a in enumerate([350, 355, 0, 5, 10])]
+    m = compute_feature_metrics(feats)
+    assert m["feature_count"] == 5
+    assert m["angular_span"] == pytest.approx(20.0)
+    assert m["occupied_angular_bins_30"] == 2
+
+
+# ------------------------------------------------------------------ #
+# Evidence gate tests
+# ------------------------------------------------------------------ #
+
+def test_evidence_gate_rejects_sparse_concentrated():
+    cfg = CorrespondenceConfig(refine=False, evidence_gate=True)
+    blank = np.zeros((320, 320, 3), dtype=np.uint8)
+    # 4 features within 3 degrees -> LOW_EVIDENCE
+    feats_a = _mini_fset([_mini_feature(a, i) for i, a in enumerate([0, 1, 2, 3])])
+    feats_b = _mini_fset([_mini_feature(a, i) for i, a in enumerate([0.2, 1.2, 2.2, 3.2])])
+    res = estimate_correspondence(blank, blank, feats_a, feats_b, config=cfg)
+    assert res.failure == FailureKind.LOW_EVIDENCE
+    assert res.valid is False
+    assert res.feature_count == 4
+    assert res.angular_coverage_ratio < 0.02
+
+
+def test_evidence_gate_accepts_well_spread():
+    cfg = CorrespondenceConfig(refine=False, evidence_gate=True)
+    blank = np.zeros((320, 320, 3), dtype=np.uint8)
+    # 4 features across 90 degrees -> passes evidence gate
+    feats_a = _mini_fset([_mini_feature(a, i) for i, a in enumerate([0, 30, 60, 90])])
+    feats_b = _mini_fset([_mini_feature(a, i) for i, a in enumerate([0, 30, 60, 90])])
+    res = estimate_correspondence(blank, blank, feats_a, feats_b, config=cfg)
+    assert res.failure != FailureKind.LOW_EVIDENCE
+    assert res.feature_count == 4
+    assert res.angular_coverage_ratio == pytest.approx(0.25)
+
+
+def test_evidence_gate_rejects_too_few_features():
+    cfg = CorrespondenceConfig(refine=False, evidence_gate=True, evidence_min_features=5)
+    blank = np.zeros((320, 320, 3), dtype=np.uint8)
+    # 4 features, spread well, but below min_features=5
+    feats_a = _mini_fset([_mini_feature(a, i) for i, a in enumerate([0, 90, 180, 270])])
+    feats_b = _mini_fset([_mini_feature(a, i) for i, a in enumerate([0, 90, 180, 270])])
+    res = estimate_correspondence(blank, blank, feats_a, feats_b, config=cfg)
+    assert res.failure == FailureKind.LOW_EVIDENCE
+    assert res.valid is False
+
+
+def test_evidence_gate_metrics_populated():
+    cfg = CorrespondenceConfig(refine=False)
+    blank = np.zeros((320, 320, 3), dtype=np.uint8)
+    feats_a = _mini_fset([_mini_feature(a, i) for i, a in enumerate([0, 45, 90, 135, 180])])
+    feats_b = _mini_fset([_mini_feature(a, i) for i, a in enumerate([0, 45, 90, 135, 180])])
+    res = estimate_correspondence(blank, blank, feats_a, feats_b, config=cfg)
+    assert res.feature_count == 5
+    assert res.angular_span > 0
+    assert res.angular_coverage_ratio > 0
+    assert res.occupied_angular_bins >= 3
+
+
+def test_evidence_gate_deterministic():
+    cfg = CorrespondenceConfig(refine=False, evidence_gate=True)
+    blank = np.zeros((320, 320, 3), dtype=np.uint8)
+    feats_a = _mini_fset([_mini_feature(a, i) for i, a in enumerate([0, 30, 60, 90])])
+    feats_b = _mini_fset([_mini_feature(a, i) for i, a in enumerate([0, 30, 60, 90])])
+    r1 = estimate_correspondence(blank, blank, feats_a, feats_b, config=cfg)
+    r2 = estimate_correspondence(blank, blank, feats_a, feats_b, config=cfg)
+    assert r1.failure == r2.failure
+    assert r1.feature_count == r2.feature_count
+    assert r1.angular_coverage_ratio == r2.angular_coverage_ratio

@@ -70,6 +70,7 @@ class FailureKind(Enum):
     LOW_SIMILARITY = "LOW_SIMILARITY"  # descriptor baseline: matches too dissimilar
     HIGH_RESIDUAL = "HIGH_RESIDUAL"    # per-pair rotation estimates inconsistent
     AMBIGUOUS = "AMBIGUOUS"            # periodic / duplicate texture ambiguity
+    LOW_EVIDENCE = "LOW_EVIDENCE"      # insufficient spatial evidence (sparse features)
 
 
 @dataclass(frozen=True)
@@ -111,6 +112,12 @@ class CorrespondenceConfig:
     global_consistency_inlier_tol_deg: float = 1.5   # inlier window for global voting
     global_consistency_min_inlier_frac: float = 0.40  # minimum inlier fraction to accept
     global_consistency_min_inlier_count: int = 3      # absolute minimum inlier count
+
+    # sparse evidence gate (disabled by default; enable for clinical use)
+    evidence_gate: bool = False                   # enable honest-refusal gate
+    evidence_min_features: int = 4               # minimum features for any estimate
+    evidence_min_angular_coverage: float = 0.20  # minimum angular coverage ratio
+    evidence_min_occupied_bins: int = 3           # minimum 30° angular bins occupied
 
     # estimator thresholds used by failure classification
     ransac_tol_deg: float = 1.5
@@ -193,6 +200,56 @@ def angular_span(angles_deg: Sequence[float]) -> float:
     ]
     gaps.append(angles[0] + 360.0 - angles[-1])
     return float(360.0 - max(gaps))
+
+
+# --------------------------------------------------------------------------- #
+# Sparse-feature coverage metrics
+# --------------------------------------------------------------------------- #
+
+def compute_feature_metrics(
+    features: Sequence[IrisFeature],
+) -> Dict[str, float]:
+    """Compute sparse-feature coverage metrics from a list of IrisFeature.
+
+    Returns a dict with engineering measurements (not clinical interpretations):
+    - feature_count: number of features
+    - angular_span: smallest arc containing all features (degrees)
+    - largest_angular_gap: largest angular gap between adjacent features
+    - angular_coverage_ratio: angular_span / 360
+    - occupied_angular_bins_30: number of distinct 30° bins with features
+    """
+    if not features:
+        return {
+            "feature_count": 0,
+            "angular_span": 0.0,
+            "largest_angular_gap": 360.0,
+            "angular_coverage_ratio": 0.0,
+            "occupied_angular_bins_30": 0,
+        }
+
+    angles = sorted(float(f.angle_deg) % 360.0 for f in features)
+    n = len(angles)
+
+    if n < 2:
+        span = 0.0
+        largest_gap = 360.0
+    else:
+        gaps = [angles[i + 1] - angles[i] for i in range(n - 1)]
+        gaps.append(angles[0] + 360.0 - angles[-1])
+        largest_gap = max(gaps)
+        span = 360.0 - largest_gap
+
+    bins = set()
+    for a in angles:
+        bins.add(int(a // 30) % 12)
+
+    return {
+        "feature_count": n,
+        "angular_span": span,
+        "largest_angular_gap": largest_gap,
+        "angular_coverage_ratio": span / 360.0,
+        "occupied_angular_bins_30": len(bins),
+    }
 
 
 # --------------------------------------------------------------------------- #
@@ -312,6 +369,13 @@ class CorrespondenceResult:
     global_inlier_frac: float = 0.0
     global_inlier_std_deg: float = 0.0
 
+    # Sparse evidence metrics (populated by estimate_correspondence)
+    feature_count: int = 0
+    angular_span: float = 0.0
+    angular_coverage_ratio: float = 0.0
+    largest_angular_gap: float = 0.0
+    occupied_angular_bins: int = 0
+
     def to_dict(self) -> dict:
         d = {
             "valid": bool(self.valid),
@@ -342,6 +406,11 @@ class CorrespondenceResult:
             "global_inlier_count": int(self.global_inlier_count),
             "global_inlier_frac": float(self.global_inlier_frac),
             "global_inlier_std_deg": float(self.global_inlier_std_deg),
+            "feature_count": int(self.feature_count),
+            "angular_span": float(self.angular_span),
+            "angular_coverage_ratio": float(self.angular_coverage_ratio),
+            "largest_angular_gap": float(self.largest_angular_gap),
+            "occupied_angular_bins": int(self.occupied_angular_bins),
         }
         return d
 
@@ -825,6 +894,20 @@ def _classify_failure(matched: Sequence[Correspondence],
         result.valid = False
         return
 
+    # Sparse evidence gate: insufficient spatial evidence for reliable rotation
+    if (config.evidence_gate
+            and (result.feature_count < config.evidence_min_features
+                 or result.angular_coverage_ratio < config.evidence_min_angular_coverage
+                 or result.occupied_angular_bins < config.evidence_min_occupied_bins)):
+        result.failure = FailureKind.LOW_EVIDENCE
+        result.failure_reason = (
+            f"sparse evidence: {result.feature_count} features, "
+            f"{result.angular_coverage_ratio:.2f} angular coverage, "
+            f"{result.occupied_angular_bins} bins"
+        )
+        result.valid = False
+        return
+
     refined = [m for m in matched if m.ncc is not None]
     if config.refine and refined:
         low_ncc = sum(1 for m in refined if m.ncc < config.ncc_min)
@@ -906,6 +989,14 @@ def estimate_correspondence(
         res.valid = False
         res.processing_time_ms = (time.perf_counter() - t0) * 1000.0
         return res
+
+    # Compute sparse-feature coverage metrics from the A-side feature set
+    fm = compute_feature_metrics(fa)
+    res.feature_count = fm["feature_count"]
+    res.angular_span = fm["angular_span"]
+    res.angular_coverage_ratio = fm["angular_coverage_ratio"]
+    res.largest_angular_gap = fm["largest_angular_gap"]
+    res.occupied_angular_bins = fm["occupied_angular_bins_30"]
 
     gray_a = gray_b = None
     if cfg.refine:
