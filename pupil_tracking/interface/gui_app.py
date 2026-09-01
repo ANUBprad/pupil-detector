@@ -1041,6 +1041,12 @@ class PupilTrackingGUI:
             side=tk.LEFT, padx=2
         )
 
+        ttk.Separator(toolbar, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=5)
+
+        ttk.Button(
+            toolbar, text="🔄 Reset", command=self._reset_media
+        ).pack(side=tk.LEFT, padx=2)
+
         # ══════════════════════════════════════════════════════════
         # RECORDING — Recording toolbar button
         # ══════════════════════════════════════════════════════════
@@ -4643,6 +4649,113 @@ class PupilTrackingGUI:
         if self._recorder.is_recording:
             self._stop_recording()
         # ══════════════════════════════════════════════════════════
+
+    def _reset_media(self) -> None:
+        """Clear all loaded media, results, and measurements.
+
+        Stops any running video/camera, releases resources, clears the
+        display canvas and measurement panels, and returns the GUI to
+        the clean welcome state ready for a new file.
+        """
+        # Stop video/camera first (releases capture, joins thread)
+        if self._video_running:
+            self._stop_video()
+
+        # Cancel pending timers
+        for attr in ("_resize_after_id", "_settings_apply_after_id", "_recording_timer_id"):
+            aid = getattr(self, attr, None)
+            if aid is not None:
+                try:
+                    self.root.after_cancel(aid)
+                except Exception:
+                    pass
+                setattr(self, attr, None)
+
+        # Stop recording if active
+        if hasattr(self, "_recorder") and self._recorder.is_recording:
+            try:
+                self._stop_recording()
+            except Exception:
+                pass
+
+        # Clear image/result state
+        self._current_image = None
+        self._current_result = None
+        self._display_image = None
+        self._canvas_image_id = None
+
+        # Clear results history
+        self._results_history.clear()
+
+        # Reset frame counter
+        self._frame_count = 0
+
+        # Clear manual ROI and ring
+        if hasattr(self, "_manual_roi"):
+            self._manual_roi = None
+        if hasattr(self, "_manual_ring"):
+            self._manual_ring = None
+        self._roi_edit_active = False
+        self._ring_edit_active = False
+
+        # Clear ruler calibration
+        self._ruler_calibration_active = False
+        self._ruler_points.clear()
+
+        # Reset internal smoothing state
+        self._last_real_proc_time_ms = 0.0
+        self._display_proc_time_ms = 0.0
+        self._display_latency_ms = 0.0
+
+        # Reset processing stats
+        self._proc_time_var.set("---")
+        self._latency_var.set("---")
+        self._latency_avg_var.set("---")
+        self._drop_var.set("---")
+        self._tracking_state_var.set("---")
+        self._frame_var.set("---")
+        self._image_size_var.set("---")
+        self._fps_var.set("---")
+        self._pipeline_var.set("---")
+
+        # Reset progress bar
+        self._progress_bar.config(mode="determinate")
+        self._progress_bar["value"] = 0
+        self._progress_label_var.set("No media loaded")
+        self._eta_label_var.set("")
+
+        # Clear measurement panel labels
+        for var_dict in (self._pv, self._lv, self._ov, self._cv_vars, self._wtw_vars):
+            if var_dict is not None:
+                for var in var_dict.values():
+                    var.set("---")
+
+        # Clear iris card
+        if hasattr(self, "_iris_vars"):
+            for var in self._iris_vars.values():
+                var.set("---")
+
+        # Reset quality badge
+        self._quality_label.config(text="  NO IMAGE  ", foreground="#888888")
+
+        # Reset summary row
+        self._summary_quality_var.set("---")
+        self._summary_quality_label.config(foreground="#888888")
+        self._summary_latency_var.set("---")
+        self._summary_pipeline_var.set("---")
+        self._set_summary_tracking_state("Ready")
+
+        # Reset details text
+        if hasattr(self, "_details_text"):
+            self._details_text.config(state=tk.NORMAL)
+            self._details_text.delete("1.0", tk.END)
+            self._details_text.config(state=tk.DISABLED)
+
+        # Reset status bar
+        self._status_var.set("Ready — load an image or video")
+
+        # Show welcome screen
+        self._draw_welcome_screen()
 
     # ================================================================
     # Display
