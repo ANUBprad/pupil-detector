@@ -43,28 +43,24 @@ from PIL import Image, ImageTk
 from pupil_tracking.core.detector import UnifiedDetector
 from pupil_tracking.video.kalman_tracker import EyeKalmanTracker
 from pupil_tracking.core.corneal_center import CornealCenterCalculator
-from pupil_tracking.iris.detect import detect_iris_features, IrisFeatureDetector
+from pupil_tracking.iris.detect import IrisFeatureDetector
 from pupil_tracking.utils.types import (
-    EyeDetectionResult,
     DetectionQuality,
     CalibrationInfo,
-    assign_quality_grade,
 )
-from pupil_tracking.utils.config import get_config, set_config
+from pupil_tracking.utils.config import get_config
 from pupil_tracking.utils.logger import get_logger
 from pupil_tracking.utils.runtime_profile import (
     apply_runtime_optimizations,
     detect_runtime_profile,
 )
-from pupil_tracking.interface.theme import DarkTheme, Colors
+from pupil_tracking.interface.theme import DarkTheme
 
 # ══════════════════════════════════════════════════════════════════
 # GRAYSCALE GUI 1 of 12 — Import grayscale types
 # ══════════════════════════════════════════════════════════════════
-from pupil_tracking.preprocessing.grayscale_handler import (
-    GrayscaleMode,
-    GrayscaleInfo,
-)
+# GrayscaleMode and GrayscaleInfo are not imported directly;
+# the detector exposes grayscale info via detector.last_grayscale_info.
 # ══════════════════════════════════════════════════════════════════
 
 try:
@@ -72,8 +68,6 @@ try:
     from pupil_tracking.video.optimized_processor import (
         OptimizedVideoProcessor,
         AsyncCapture,
-        FrameResult,
-        TrackingQuality,
     )
 
     _FAST_PIPELINE_AVAILABLE = True
@@ -82,8 +76,6 @@ except ImportError:
     FastInference = None
     OptimizedVideoProcessor = None
     AsyncCapture = None
-    FrameResult = None
-    TrackingQuality = None
 
 # ══════════════════════════════════════════════════════════════════
 # RECORDING — Import FrameRecorder
@@ -3130,16 +3122,7 @@ class PupilTrackingGUI:
             image, frame_number=self._frame_count, source=path
         )
         result = self._apply_manual_ring_policy(result)
-        try:
-            pupil_e = result.pupil.ellipse if result.pupil.detected else None
-            limbus_e = result.limbus.ellipse if result.limbus.detected else None
-            iris_result = detect_iris_features(image, pupil_e, limbus_e)
-            result.iris_detection = iris_result
-            result.iris_status = iris_result.status
-        except Exception as exc:
-            self.logger.debug("Iris detection skipped: %s", exc)
-            result.iris_detection = None
-            result.iris_status = None
+        self._detect_iris(result, image, "single-image")
         self._current_result = result
         self._results_history.append(result.to_dict())
         self._update_measurements(result)
@@ -3345,27 +3328,7 @@ class PupilTrackingGUI:
             self._results_history.append(smoothed.to_dict())
 
             # ── Iris detection for video frames ────────────────────────
-            if (
-                self._iris_detector is not None
-                and smoothed.has_both
-                and getattr(smoothed.pupil, "ellipse", None) is not None
-                and getattr(smoothed.limbus, "ellipse", None) is not None
-            ):
-                try:
-                    pupil_e = smoothed.pupil.ellipse
-                    limbus_e = smoothed.limbus.ellipse
-                    iris_result = self._iris_detector.detect(
-                        frame, pupil_e, limbus_e
-                    )
-                    smoothed.iris_detection = iris_result
-                    smoothed.iris_status = iris_result.status
-                except Exception as iris_exc:
-                    self.logger.debug("Video iris detection failed: %s", iris_exc)
-                    smoothed.iris_detection = None
-                    smoothed.iris_status = None
-            else:
-                smoothed.iris_detection = None
-                smoothed.iris_status = None
+            self._detect_iris(smoothed, frame, "video-classic")
             # ── End iris detection ─────────────────────────────────────
 
             # ══════════════════════════════════════════════════════════
@@ -3504,6 +3467,10 @@ class PupilTrackingGUI:
                     except Exception as exc:
                         self.logger.error("Optimised to_dict error: %s", exc)
 
+                    # ── Iris detection for threaded optimised video ───
+                    self._detect_iris(adapted, frame, "video-threaded-optimised")
+                    # ── End iris detection ─────────────────────────────
+
                     # ══════════════════════════════════════════════════════════
                     # RECORDING — Write frame to recorder at full resolution
                     # ══════════════════════════════════════════════════════════
@@ -3604,27 +3571,7 @@ class PupilTrackingGUI:
                 self.logger.error("Optimised to_dict error: %s", exc)
 
             # ── Iris detection for optimized video frames ──────────────
-            if (
-                self._iris_detector is not None
-                and adapted.has_both
-                and getattr(adapted.pupil, "ellipse", None) is not None
-                and getattr(adapted.limbus, "ellipse", None) is not None
-            ):
-                try:
-                    pupil_e = adapted.pupil.ellipse
-                    limbus_e = adapted.limbus.ellipse
-                    iris_result = self._iris_detector.detect(
-                        frame, pupil_e, limbus_e
-                    )
-                    adapted.iris_detection = iris_result
-                    adapted.iris_status = iris_result.status
-                except Exception as iris_exc:
-                    self.logger.debug("Video iris detection failed: %s", iris_exc)
-                    adapted.iris_detection = None
-                    adapted.iris_status = None
-            else:
-                adapted.iris_detection = None
-                adapted.iris_status = None
+            self._detect_iris(adapted, frame, "video-optimised")
             # ── End iris detection ─────────────────────────────────────
 
             # ══════════════════════════════════════════════════════════
@@ -3859,27 +3806,7 @@ class PupilTrackingGUI:
                 self.logger.error("Optimised camera to_dict error: %s", exc)
 
             # ── Iris detection for optimized camera frames ─────────────
-            if (
-                self._iris_detector is not None
-                and adapted.has_both
-                and getattr(adapted.pupil, "ellipse", None) is not None
-                and getattr(adapted.limbus, "ellipse", None) is not None
-            ):
-                try:
-                    pupil_e = adapted.pupil.ellipse
-                    limbus_e = adapted.limbus.ellipse
-                    iris_result = self._iris_detector.detect(
-                        frame, pupil_e, limbus_e
-                    )
-                    adapted.iris_detection = iris_result
-                    adapted.iris_status = iris_result.status
-                except Exception as iris_exc:
-                    self.logger.debug("Camera iris detection failed: %s", iris_exc)
-                    adapted.iris_detection = None
-                    adapted.iris_status = None
-            else:
-                adapted.iris_detection = None
-                adapted.iris_status = None
+            self._detect_iris(adapted, frame, "camera")
             # ── End iris detection ─────────────────────────────────────
 
             # ══════════════════════════════════════════════════════════
@@ -4649,6 +4576,36 @@ class PupilTrackingGUI:
         if self._recorder.is_recording:
             self._stop_recording()
         # ══════════════════════════════════════════════════════════
+
+    def _detect_iris(
+        self, result: Any, frame: np.ndarray, log_context: str = "frame"
+    ) -> None:
+        """Run iris detection on a result that has both pupil and limbus.
+
+        Assigns result.iris_detection and result.iris_status.
+        Safe to call when self._iris_detector is None.
+        """
+        if (
+            self._iris_detector is not None
+            and result.has_both
+            and getattr(result.pupil, "ellipse", None) is not None
+            and getattr(result.limbus, "ellipse", None) is not None
+        ):
+            try:
+                iris_result = self._iris_detector.detect(
+                    frame, result.pupil.ellipse, result.limbus.ellipse
+                )
+                result.iris_detection = iris_result
+                result.iris_status = iris_result.status
+            except Exception as iris_exc:
+                self.logger.debug(
+                    "Iris detection failed (%s): %s", log_context, iris_exc
+                )
+                result.iris_detection = None
+                result.iris_status = None
+        else:
+            result.iris_detection = None
+            result.iris_status = None
 
     def _reset_media(self) -> None:
         """Clear all loaded media, results, and measurements.
@@ -6026,49 +5983,40 @@ class PupilTrackingGUI:
             if hasattr(self, "_gray_settings_status"):
                 self._gray_settings_status.set(f"Current: {gs_label}")
 
-            # ── Iris / Cyclotorsion (isolated try/except) ──────────────
-            try:
-                iris_det = getattr(result, "iris_detection", None)
-                if (
-                    hasattr(self, "_iris_vars")
-                    and iris_det is not None
-                    and getattr(iris_det, "valid", False)
-                ):
-                    fs = getattr(iris_det, "feature_set", None)
-                    n_features = len(fs.features) if fs is not None else 0
-                    coverage = fs.region_coverage if fs is not None else 0.0
-                    self._iris_vars["status"].set("Valid")
-                    self._iris_vars["feature_count"].set(str(n_features))
-                    self._iris_vars["angular_coverage"].set(f"{coverage:.1%}")
-                    corr = getattr(result, "iris_correspondence", None)
-                    if corr is not None and getattr(corr, "valid", False):
-                        rot = corr.estimated_rotation_deg
-                        sign = "+" if rot >= 0 else ""
-                        self._iris_vars["rotation_angle"].set(f"{sign}{rot:.2f}")
-                        self._iris_vars["confidence"].set("High")
-                        self._iris_vars["evidence"].set("Good")
-                    else:
-                        self._iris_vars["rotation_angle"].set("---")
-                        self._iris_vars["confidence"].set("---")
-                        self._iris_vars["evidence"].set("Single image")
-                elif hasattr(self, "_iris_vars"):
-                    iris_status = getattr(result, "iris_status", None)
-                    if iris_status is not None:
-                        status_str = (
-                            iris_status.value
-                            if hasattr(iris_status, "value")
-                            else str(iris_status)
-                        )
-                        self._iris_vars["status"].set(f"Rejected: {status_str}")
-                    else:
-                        self._iris_vars["status"].set("Unavailable")
-                    self._iris_vars["feature_count"].set("---")
-                    self._iris_vars["angular_coverage"].set("---")
+            # ── Iris / Cyclotorsion ────────────────────────────────────
+            iris_det = getattr(result, "iris_detection", None)
+            if iris_det is not None and getattr(iris_det, "valid", False):
+                fs = getattr(iris_det, "feature_set", None)
+                self._iris_vars["status"].set("Valid")
+                self._iris_vars["feature_count"].set(
+                    str(len(fs.features)) if fs else "---"
+                )
+                self._iris_vars["angular_coverage"].set(
+                    f"{fs.region_coverage:.1%}" if fs else "---"
+                )
+                corr = getattr(result, "iris_correspondence", None)
+                if corr is not None and getattr(corr, "valid", False):
+                    rot = corr.estimated_rotation_deg
+                    self._iris_vars["rotation_angle"].set(
+                        f"{'+' if rot >= 0 else ''}{rot:.2f}"
+                    )
+                    self._iris_vars["confidence"].set("High")
+                    self._iris_vars["evidence"].set("Good")
+                else:
                     self._iris_vars["rotation_angle"].set("---")
                     self._iris_vars["confidence"].set("---")
-                    self._iris_vars["evidence"].set("---")
-            except Exception as iris_exc:
-                self.logger.debug("Iris panel update error: %s", iris_exc)
+                    self._iris_vars["evidence"].set("Single image")
+            else:
+                iris_status = getattr(result, "iris_status", None)
+                if iris_status is not None:
+                    self._iris_vars["status"].set(
+                        f"Rejected: {getattr(iris_status, 'value', str(iris_status))}"
+                    )
+                else:
+                    self._iris_vars["status"].set("Unavailable")
+                for key in ("feature_count", "angular_coverage", "rotation_angle",
+                            "confidence", "evidence"):
+                    self._iris_vars[key].set("---")
 
             self._update_details(result)
         except Exception as exc:
