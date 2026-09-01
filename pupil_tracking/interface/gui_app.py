@@ -43,7 +43,7 @@ from PIL import Image, ImageTk
 from pupil_tracking.core.detector import UnifiedDetector
 from pupil_tracking.video.kalman_tracker import EyeKalmanTracker
 from pupil_tracking.core.corneal_center import CornealCenterCalculator
-from pupil_tracking.iris.detect import detect_iris_features
+from pupil_tracking.iris.detect import detect_iris_features, IrisFeatureDetector
 from pupil_tracking.utils.types import (
     EyeDetectionResult,
     DetectionQuality,
@@ -144,6 +144,7 @@ class PupilTrackingGUI:
         self._detector: Optional[UnifiedDetector] = None
         self._tracker: Optional[EyeKalmanTracker] = None
         self._corneal_calc: Optional[CornealCenterCalculator] = None
+        self._iris_detector: Optional[IrisFeatureDetector] = None
 
         self._current_image: Optional[np.ndarray] = None
         self._current_result: Optional[Any] = None
@@ -287,6 +288,12 @@ class PupilTrackingGUI:
         except Exception as exc:
             self.logger.error("Failed to init corneal calc: %s", exc)
             self._corneal_calc = None
+
+        try:
+            self._iris_detector = IrisFeatureDetector()
+        except Exception as exc:
+            self.logger.error("Failed to init iris detector: %s", exc)
+            self._iris_detector = None
 
         try:
             # ══════════════════════════════════════════════════════
@@ -3331,6 +3338,30 @@ class PupilTrackingGUI:
             self._current_result = smoothed
             self._results_history.append(smoothed.to_dict())
 
+            # ── Iris detection for video frames ────────────────────────
+            if (
+                self._iris_detector is not None
+                and smoothed.has_both
+                and getattr(smoothed.pupil, "ellipse", None) is not None
+                and getattr(smoothed.limbus, "ellipse", None) is not None
+            ):
+                try:
+                    pupil_e = smoothed.pupil.ellipse
+                    limbus_e = smoothed.limbus.ellipse
+                    iris_result = self._iris_detector.detect(
+                        frame, pupil_e, limbus_e
+                    )
+                    smoothed.iris_detection = iris_result
+                    smoothed.iris_status = iris_result.status
+                except Exception as iris_exc:
+                    self.logger.debug("Video iris detection failed: %s", iris_exc)
+                    smoothed.iris_detection = None
+                    smoothed.iris_status = None
+            else:
+                smoothed.iris_detection = None
+                smoothed.iris_status = None
+            # ── End iris detection ─────────────────────────────────────
+
             # ══════════════════════════════════════════════════════════
             # RECORDING — Write frame to recorder at full resolution
             # ══════════════════════════════════════════════════════════
@@ -3566,6 +3597,30 @@ class PupilTrackingGUI:
             except Exception as exc:
                 self.logger.error("Optimised to_dict error: %s", exc)
 
+            # ── Iris detection for optimized video frames ──────────────
+            if (
+                self._iris_detector is not None
+                and adapted.has_both
+                and getattr(adapted.pupil, "ellipse", None) is not None
+                and getattr(adapted.limbus, "ellipse", None) is not None
+            ):
+                try:
+                    pupil_e = adapted.pupil.ellipse
+                    limbus_e = adapted.limbus.ellipse
+                    iris_result = self._iris_detector.detect(
+                        frame, pupil_e, limbus_e
+                    )
+                    adapted.iris_detection = iris_result
+                    adapted.iris_status = iris_result.status
+                except Exception as iris_exc:
+                    self.logger.debug("Video iris detection failed: %s", iris_exc)
+                    adapted.iris_detection = None
+                    adapted.iris_status = None
+            else:
+                adapted.iris_detection = None
+                adapted.iris_status = None
+            # ── End iris detection ─────────────────────────────────────
+
             # ══════════════════════════════════════════════════════════
             # RECORDING — Write frame to recorder at full resolution
             # ══════════════════════════════════════════════════════════
@@ -3796,6 +3851,30 @@ class PupilTrackingGUI:
                 self._results_history.append(adapted.to_dict())
             except Exception as exc:
                 self.logger.error("Optimised camera to_dict error: %s", exc)
+
+            # ── Iris detection for optimized camera frames ─────────────
+            if (
+                self._iris_detector is not None
+                and adapted.has_both
+                and getattr(adapted.pupil, "ellipse", None) is not None
+                and getattr(adapted.limbus, "ellipse", None) is not None
+            ):
+                try:
+                    pupil_e = adapted.pupil.ellipse
+                    limbus_e = adapted.limbus.ellipse
+                    iris_result = self._iris_detector.detect(
+                        frame, pupil_e, limbus_e
+                    )
+                    adapted.iris_detection = iris_result
+                    adapted.iris_status = iris_result.status
+                except Exception as iris_exc:
+                    self.logger.debug("Camera iris detection failed: %s", iris_exc)
+                    adapted.iris_detection = None
+                    adapted.iris_status = None
+            else:
+                adapted.iris_detection = None
+                adapted.iris_status = None
+            # ── End iris detection ─────────────────────────────────────
 
             # ══════════════════════════════════════════════════════════
             # RECORDING — Write frame to recorder at full resolution
