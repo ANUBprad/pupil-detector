@@ -5834,45 +5834,49 @@ class PupilTrackingGUI:
             if hasattr(self, "_gray_settings_status"):
                 self._gray_settings_status.set(f"Current: {gs_label}")
 
-            iris_det = getattr(result, "iris_detection", None)
-            if (
-                hasattr(self, "_iris_vars")
-                and iris_det is not None
-                and getattr(iris_det, "valid", False)
-            ):
-                fs = getattr(iris_det, "feature_set", None)
-                n_features = len(fs.features) if fs is not None else 0
-                coverage = fs.region_coverage if fs is not None else 0.0
-                self._iris_vars["status"].set("Valid")
-                self._iris_vars["feature_count"].set(str(n_features))
-                self._iris_vars["angular_coverage"].set(f"{coverage:.1%}")
-                corr = getattr(result, "iris_correspondence", None)
-                if corr is not None and getattr(corr, "valid", False):
-                    rot = corr.estimated_rotation_deg
-                    sign = "+" if rot >= 0 else ""
-                    self._iris_vars["rotation_angle"].set(f"{sign}{rot:.2f}")
-                    self._iris_vars["confidence"].set("High")
-                    self._iris_vars["evidence"].set("Good")
-                else:
+            # ── Iris / Cyclotorsion (isolated try/except) ──────────────
+            try:
+                iris_det = getattr(result, "iris_detection", None)
+                if (
+                    hasattr(self, "_iris_vars")
+                    and iris_det is not None
+                    and getattr(iris_det, "valid", False)
+                ):
+                    fs = getattr(iris_det, "feature_set", None)
+                    n_features = len(fs.features) if fs is not None else 0
+                    coverage = fs.region_coverage if fs is not None else 0.0
+                    self._iris_vars["status"].set("Valid")
+                    self._iris_vars["feature_count"].set(str(n_features))
+                    self._iris_vars["angular_coverage"].set(f"{coverage:.1%}")
+                    corr = getattr(result, "iris_correspondence", None)
+                    if corr is not None and getattr(corr, "valid", False):
+                        rot = corr.estimated_rotation_deg
+                        sign = "+" if rot >= 0 else ""
+                        self._iris_vars["rotation_angle"].set(f"{sign}{rot:.2f}")
+                        self._iris_vars["confidence"].set("High")
+                        self._iris_vars["evidence"].set("Good")
+                    else:
+                        self._iris_vars["rotation_angle"].set("---")
+                        self._iris_vars["confidence"].set("---")
+                        self._iris_vars["evidence"].set("Single image")
+                elif hasattr(self, "_iris_vars"):
+                    iris_status = getattr(result, "iris_status", None)
+                    if iris_status is not None:
+                        status_str = (
+                            iris_status.value
+                            if hasattr(iris_status, "value")
+                            else str(iris_status)
+                        )
+                        self._iris_vars["status"].set(f"Rejected: {status_str}")
+                    else:
+                        self._iris_vars["status"].set("Unavailable")
+                    self._iris_vars["feature_count"].set("---")
+                    self._iris_vars["angular_coverage"].set("---")
                     self._iris_vars["rotation_angle"].set("---")
                     self._iris_vars["confidence"].set("---")
-                    self._iris_vars["evidence"].set("Single image")
-            elif hasattr(self, "_iris_vars"):
-                iris_status = getattr(result, "iris_status", None)
-                if iris_status is not None:
-                    status_str = (
-                        iris_status.value
-                        if hasattr(iris_status, "value")
-                        else str(iris_status)
-                    )
-                    self._iris_vars["status"].set(f"Rejected: {status_str}")
-                else:
-                    self._iris_vars["status"].set("Unavailable")
-                self._iris_vars["feature_count"].set("---")
-                self._iris_vars["angular_coverage"].set("---")
-                self._iris_vars["rotation_angle"].set("---")
-                self._iris_vars["confidence"].set("---")
-                self._iris_vars["evidence"].set("---")
+                    self._iris_vars["evidence"].set("---")
+            except Exception as iris_exc:
+                self.logger.debug("Iris panel update error: %s", iris_exc)
 
             self._update_details(result)
         except Exception as exc:
