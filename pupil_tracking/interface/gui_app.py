@@ -3123,7 +3123,8 @@ class PupilTrackingGUI:
             iris_result = detect_iris_features(image, pupil_e, limbus_e)
             result.iris_detection = iris_result
             result.iris_status = iris_result.status
-        except Exception:
+        except Exception as exc:
+            self.logger.debug("Iris detection skipped: %s", exc)
             result.iris_detection = None
             result.iris_status = None
         self._current_result = result
