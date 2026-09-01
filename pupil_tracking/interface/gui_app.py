@@ -43,6 +43,7 @@ from PIL import Image, ImageTk
 from pupil_tracking.core.detector import UnifiedDetector
 from pupil_tracking.video.kalman_tracker import EyeKalmanTracker
 from pupil_tracking.core.corneal_center import CornealCenterCalculator
+from pupil_tracking.iris.detect import detect_iris_features
 from pupil_tracking.utils.types import (
     EyeDetectionResult,
     DetectionQuality,
@@ -252,9 +253,9 @@ class PupilTrackingGUI:
         self._limbus_fill_alpha_var = tk.IntVar(value=0)
 
         # ── Modular Calibration Settings ──
-        init_mode = getattr(self.cfg.calibration, "mode", "ANATOMICAL_ANCHOR") if hasattr(self.cfg, "calibration") else "ANATOMICAL_ANCHOR"
+        init_mode = getattr(self.cfg.calibration, "mode", "FIXED_PIXEL_SCALE") if hasattr(self.cfg, "calibration") else "FIXED_PIXEL_SCALE"
         self._calibration_mode_var = tk.StringVar(value=init_mode)
-        init_manual_px = float(getattr(self.cfg.calibration, "manual_px_per_mm", 44.5) or 44.5) if hasattr(self.cfg, "calibration") else 44.5
+        init_manual_px = float(getattr(self.cfg.calibration, "manual_px_per_mm", 58.2) or 58.2) if hasattr(self.cfg, "calibration") else 58.2
         self._fixed_scale_var = tk.DoubleVar(value=init_manual_px)
         init_corneal = float(getattr(self.cfg.calibration, "corneal_diameter_mm", 12.0) or 12.0) if hasattr(self.cfg, "calibration") else 12.0
         self._corneal_ref_mm_var = tk.DoubleVar(value=init_corneal)
@@ -660,13 +661,12 @@ class PupilTrackingGUI:
                 ],
             ),
             (
-                "CALIBRATION",
-                self._hex_to_bgr(self._colors.CALIBRATION),
+                "CORNEAL DIMENSIONS (WTW)",
+                self._hex_to_bgr(self._colors.LIMBUS),
                 [
-                    ("Source", self._cv_vars["source"].get()),
-                    ("px/mm", self._cv_vars["scale_px"].get()),
-                    ("mm/px", self._cv_vars["scale_mm"].get()),
-                    ("Reference", self._cv_vars["reference"].get()),
+                    ("Horizontal", self._wtw_vars["horizontal"].get()),
+                    ("Vertical", self._wtw_vars["vertical"].get()),
+                    ("Mean", self._wtw_vars["mean"].get()),
                 ],
             ),
             (
@@ -967,12 +967,52 @@ class PupilTrackingGUI:
     # ================================================================
 
     def _build_toolbar(self) -> None:
-        toolbar = ttk.Frame(self.root, style="Primary.TFrame")
-        toolbar.pack(side=tk.TOP, fill=tk.X, padx=0, pady=(0, 1))
+        c = self._colors
+        # Outer bar spans the window: it holds the horizontally scrollable
+        # ribbon on the left and a pinned, always-visible quality badge on
+        # the right (the badge must never scroll out of view).
+        bar = ttk.Frame(self.root, style="Primary.TFrame")
+        bar.pack(side=tk.TOP, fill=tk.X, padx=0, pady=(0, 1))
 
-        ttk.Button(toolbar, text="📂 Image", command=self._open_image).pack(
-            side=tk.LEFT, padx=2
+        self._quality_label = ttk.Label(
+            bar,
+            text="  NO IMAGE  ",
+            style="Quality.TLabel",
+            anchor="center",
         )
+        self._quality_label.pack(side=tk.RIGHT, padx=10)
+
+        # Scrollable ribbon: a Canvas hosting an inner frame, with a slider
+        # (horizontal scrollbar) that appears only when the ribbon overflows
+        # the available width so every button stays reachable.
+        scroll_wrap = ttk.Frame(bar, style="Primary.TFrame")
+        scroll_wrap.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+        self._toolbar_canvas = tk.Canvas(
+            scroll_wrap,
+            bg=c.BG_PRIMARY,
+            highlightthickness=0,
+            borderwidth=0,
+            height=1,
+        )
+        self._toolbar_scroll = ttk.Scrollbar(
+            scroll_wrap,
+            orient=tk.HORIZONTAL,
+            command=self._toolbar_canvas.xview,
+        )
+        self._toolbar_canvas.configure(xscrollcommand=self._toolbar_scroll.set)
+        self._toolbar_canvas.pack(side=tk.TOP, fill=tk.X, expand=True)
+        # The scrollbar is packed/unpacked on demand by _sync_toolbar().
+        self._toolbar_scroll_shown = False
+
+        # Inner frame kept as ``toolbar`` so all button rows below are hosted
+        # inside the scrollable area unchanged.
+        toolbar = ttk.Frame(self._toolbar_canvas, style="Primary.TFrame")
+        self._toolbar_inner = toolbar
+        self._toolbar_window = self._toolbar_canvas.create_window(
+            (0, 0), window=toolbar, anchor="nw"
+        )
+
         ttk.Button(toolbar, text="🎞 Video", command=self._open_video).pack(
             side=tk.LEFT, padx=2
         )
@@ -1083,13 +1123,43 @@ class PupilTrackingGUI:
         )
 
 
-        self._quality_label = ttk.Label(
-            toolbar,
-            text="  NO IMAGE  ",
-            style="Quality.TLabel",
-            anchor="center",
-        )
-        self._quality_label.pack(side=tk.RIGHT, padx=10)
+        # ── Horizontal scroll plumbing ──────────────────────────────
+        # Keeps the canvas exactly one ribbon-row tall, updates the
+        # scrollable region, and shows the slider only when the ribbon is
+        # wider than the visible area.
+        def _sync_toolbar(_event=None) -> None:
+            canvas = self._toolbar_canvas
+            inner = self._toolbar_inner
+            req_w = inner.winfo_reqwidth()
+            req_h = inner.winfo_reqheight()
+            # Match the canvas height to the ribbon only when it actually
+            # changes, so we never fight the canvas <Configure> event.
+            if req_h != getattr(self, "_toolbar_req_h", None):
+                self._toolbar_req_h = req_h
+                canvas.configure(height=req_h)
+            canvas.configure(scrollregion=(0, 0, req_w, req_h))
+            need = req_w > canvas.winfo_width() + 1
+            if need and not self._toolbar_scroll_shown:
+                self._toolbar_scroll.pack(side=tk.BOTTOM, fill=tk.X)
+                self._toolbar_scroll_shown = True
+            elif not need and self._toolbar_scroll_shown:
+                self._toolbar_scroll.pack_forget()
+                self._toolbar_scroll_shown = False
+                canvas.xview_moveto(0.0)
+
+        def _on_toolbar_wheel(event) -> str:
+            # Wheel (and Shift+wheel) over the ribbon scrolls it sideways.
+            if self._toolbar_scroll_shown and event.delta:
+                self._toolbar_canvas.xview_scroll(
+                    int(-event.delta / 120), "units"
+                )
+            return "break"
+
+        self._toolbar_inner.bind("<Configure>", _sync_toolbar)
+        self._toolbar_canvas.bind("<Configure>", _sync_toolbar)
+        self._toolbar_canvas.bind("<MouseWheel>", _on_toolbar_wheel)
+        self._toolbar_canvas.bind("<Shift-MouseWheel>", _on_toolbar_wheel)
+        self._toolbar_canvas.after_idle(_sync_toolbar)
 
     # ================================================================
     # Main Area
@@ -1738,6 +1808,17 @@ class PupilTrackingGUI:
         # GRAYSCALE GUI 9 of 12 — Grayscale info in measurements
         # ══════════════════════════════════════════════════════════
         self._gray_mode_var_display = add_row(proc_frame, "Grayscale:")
+
+        iris_frame = add_card(
+            cards_outer, "CYCLOTORSION / IRIS", "OffsetHeader.TLabel", 4, 0, 2
+        )
+        self._iris_vars: Dict[str, tk.StringVar] = {}
+        self._iris_vars["status"] = add_row(iris_frame, "Status:")
+        self._iris_vars["feature_count"] = add_row(iris_frame, "Features:")
+        self._iris_vars["angular_coverage"] = add_row(iris_frame, "Coverage:")
+        self._iris_vars["rotation_angle"] = add_row(iris_frame, "Rotation Angle:")
+        self._iris_vars["confidence"] = add_row(iris_frame, "Confidence:")
+        self._iris_vars["evidence"] = add_row(iris_frame, "Evidence:")
 
 
     def _build_details_panel(self, parent: ttk.Frame) -> None:
@@ -3036,6 +3117,15 @@ class PupilTrackingGUI:
             image, frame_number=self._frame_count, source=path
         )
         result = self._apply_manual_ring_policy(result)
+        try:
+            pupil_e = result.pupil.ellipse if result.pupil.detected else None
+            limbus_e = result.limbus.ellipse if result.limbus.detected else None
+            iris_result = detect_iris_features(image, pupil_e, limbus_e)
+            result.iris_detection = iris_result
+            result.iris_status = iris_result.status
+        except Exception:
+            result.iris_detection = None
+            result.iris_status = None
         self._current_result = result
         self._results_history.append(result.to_dict())
         self._update_measurements(result)
@@ -3858,7 +3948,7 @@ class PupilTrackingGUI:
             # export reflect the user's selection.
             _cal_mode = self._calibration_mode_var.get() if hasattr(self, "_calibration_mode_var") else "ANATOMICAL_ANCHOR"
             _corneal_mm = float(self._corneal_ref_mm_var.get() if hasattr(self, "_corneal_ref_mm_var") else _CORNEAL_DIAMETER_MM)
-            _fixed_scale = float(self._fixed_scale_var.get() if hasattr(self, "_fixed_scale_var") else 44.5)
+            _fixed_scale = float(self._fixed_scale_var.get() if hasattr(self, "_fixed_scale_var") else 58.2)
             _ring_ref_mm = float(self._ring_ref_mm_var.get() if hasattr(self, "_ring_ref_mm_var") else 9.4)
             if _cal_mode in ("FIXED_PIXEL_SCALE", "fixed_manual", "manual"):
                 _px = max(0.1, _fixed_scale)
@@ -4016,7 +4106,7 @@ class PupilTrackingGUI:
 
         cal_mode = self._calibration_mode_var.get() if hasattr(self, "_calibration_mode_var") else "ANATOMICAL_ANCHOR"
         corneal_mm = float(self._corneal_ref_mm_var.get() if hasattr(self, "_corneal_ref_mm_var") else _CORNEAL_DIAMETER_MM)
-        fixed_scale = float(self._fixed_scale_var.get() if hasattr(self, "_fixed_scale_var") else 44.5)
+        fixed_scale = float(self._fixed_scale_var.get() if hasattr(self, "_fixed_scale_var") else 58.2)
         ring_ref_mm = float(self._ring_ref_mm_var.get() if hasattr(self, "_ring_ref_mm_var") else 9.4)
 
         if cal_mode in ("FIXED_PIXEL_SCALE", "fixed_manual", "manual"):
@@ -4973,29 +5063,9 @@ class PupilTrackingGUI:
 
         self._draw_cross_section(out, result, scale)
 
-        quality = (
-            result.overall_quality.value
-            if hasattr(result.overall_quality, "value")
-            else str(result.overall_quality)
-        )
-        color_map = {
-            "SURGICAL": (0, 230, 118),
-            "CLINICAL": (246, 182, 41),
-            "RESEARCH": (38, 167, 255),
-            "INSUFFICIENT": (80, 83, 239),
-            "NO_DETECTION": (97, 97, 97),
-        }
-        badge_color = color_map.get(quality, (128, 128, 128))
-        font_scale_q = max(0.4, 0.7 * scale)
-        cv2.putText(
-            out,
-            f"{quality} ({result.overall_confidence:.2f})",
-            (10, 30),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            font_scale_q,
-            badge_color,
-            2,
-        )
+        # (Removed) On-image quality badge text (e.g. "SURGICAL (0.94)") that
+        # was drawn top-left on the video.  The quality/confidence is still
+        # shown in the ribbon badge and the measurements panel.
         font_scale_t = max(0.3, 0.5 * scale)
         cv2.putText(
             out,
@@ -5006,29 +5076,9 @@ class PupilTrackingGUI:
             (180, 180, 180),
             1,
         )
-        if self._last_opt_stats.get("overload_active"):
-            label = "OVERLOAD PROTECTION"
-            org = (10, 58)
-            cv2.putText(
-                out,
-                label,
-                org,
-                cv2.FONT_HERSHEY_SIMPLEX,
-                max(0.35, 0.55 * scale),
-                (20, 20, 20),
-                3,
-                cv2.LINE_AA,
-            )
-            cv2.putText(
-                out,
-                label,
-                org,
-                cv2.FONT_HERSHEY_SIMPLEX,
-                max(0.35, 0.55 * scale),
-                (0, 215, 255),
-                1,
-                cv2.LINE_AA,
-            )
+        # (Removed) On-image "OVERLOAD PROTECTION" overlay that blinked
+        # top-left while adaptive overload protection was active.  Overload
+        # protection itself still runs; only the on-video text was removed.
 
         # ══════════════════════════════════════════════════════════
         # GRAYSCALE GUI 12 of 12 — Grayscale mode badge on image
@@ -5712,6 +5762,12 @@ class PupilTrackingGUI:
                 # calibration.  Pre-computed attributes (set by
                 # _add_mm_values during detection) become stale when the
                 # calibration mode changes without a new detection.
+                #
+                # Horizontal WTW = 2 x Limbus Semi-Major (mm)
+                # Vertical   WTW = 2 x Limbus Semi-Minor (mm)
+                # i.e. the full limbus axes in mm — exactly twice the
+                # Semi-Major (mm) / Semi-Minor (mm) rows shown in the Limbus
+                # panel.  Reported as the true measured geometry (no clamping).
                 h_wtw = 2.0 * le.semi_major * mm_per_px
                 v_wtw = 2.0 * le.semi_minor * mm_per_px
                 m_wtw = (h_wtw + v_wtw) / 2.0
@@ -5776,6 +5832,46 @@ class PupilTrackingGUI:
 
             if hasattr(self, "_gray_settings_status"):
                 self._gray_settings_status.set(f"Current: {gs_label}")
+
+            iris_det = getattr(result, "iris_detection", None)
+            if (
+                hasattr(self, "_iris_vars")
+                and iris_det is not None
+                and getattr(iris_det, "valid", False)
+            ):
+                fs = getattr(iris_det, "feature_set", None)
+                n_features = len(fs.features) if fs is not None else 0
+                coverage = fs.region_coverage if fs is not None else 0.0
+                self._iris_vars["status"].set("Valid")
+                self._iris_vars["feature_count"].set(str(n_features))
+                self._iris_vars["angular_coverage"].set(f"{coverage:.1%}")
+                corr = getattr(result, "iris_correspondence", None)
+                if corr is not None and getattr(corr, "valid", False):
+                    rot = corr.estimated_rotation_deg
+                    sign = "+" if rot >= 0 else ""
+                    self._iris_vars["rotation_angle"].set(f"{sign}{rot:.2f}")
+                    self._iris_vars["confidence"].set("High")
+                    self._iris_vars["evidence"].set("Good")
+                else:
+                    self._iris_vars["rotation_angle"].set("---")
+                    self._iris_vars["confidence"].set("---")
+                    self._iris_vars["evidence"].set("Single image")
+            elif hasattr(self, "_iris_vars"):
+                iris_status = getattr(result, "iris_status", None)
+                if iris_status is not None:
+                    status_str = (
+                        iris_status.value
+                        if hasattr(iris_status, "value")
+                        else str(iris_status)
+                    )
+                    self._iris_vars["status"].set(f"Rejected: {status_str}")
+                else:
+                    self._iris_vars["status"].set("Unavailable")
+                self._iris_vars["feature_count"].set("---")
+                self._iris_vars["angular_coverage"].set("---")
+                self._iris_vars["rotation_angle"].set("---")
+                self._iris_vars["confidence"].set("---")
+                self._iris_vars["evidence"].set("---")
 
             self._update_details(result)
         except Exception as exc:
@@ -5939,6 +6035,26 @@ class PupilTrackingGUI:
                 f" mm = {cal.reference_diameter_px:.0f} px"
             )
             lines.append(f"  Confidence: {cal.confidence:.3f}")
+            lines.append("")
+
+        iris_det = getattr(result, "iris_detection", None)
+        if iris_det is not None and getattr(iris_det, "valid", False):
+            fs = getattr(iris_det, "feature_set", None)
+            if fs is not None:
+                lines.append("=== IRIS FEATURES ===")
+                lines.append(f"  Features:   {len(fs.features)}")
+                lines.append(f"  Coverage:   {fs.region_coverage:.4f}")
+                lines.append(f"  Status:     {iris_det.status.value}")
+                lines.append("")
+        elif getattr(result, "iris_status", None) is not None:
+            iris_status = result.iris_status
+            status_str = (
+                iris_status.value
+                if hasattr(iris_status, "value")
+                else str(iris_status)
+            )
+            lines.append("=== IRIS FEATURES ===")
+            lines.append(f"  Status:     {status_str}")
             lines.append("")
 
         if result.alerts:
