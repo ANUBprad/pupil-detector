@@ -1793,7 +1793,7 @@ class PupilTrackingGUI:
         self._wtw_vars["vertical"] = add_row(wtw_frame, "Vertical WTW:")
         self._wtw_vars["mean"] = add_row(wtw_frame, "Mean WTW:")
 
-        proc_frame = add_card(cards_outer, "PROCESSING", "ProcHeader.TLabel", 3, 0, 2)
+        proc_frame = add_card(cards_outer, "PROCESSING", "ProcHeader.TLabel", 4, 0, 2)
         self._proc_time_var = add_row(proc_frame, "Proc. Time:")
         self._latency_var = add_row(proc_frame, "Latency:")
         self._latency_avg_var = add_row(proc_frame, "Latency Avg:")
@@ -1810,7 +1810,7 @@ class PupilTrackingGUI:
         self._gray_mode_var_display = add_row(proc_frame, "Grayscale:")
 
         iris_frame = add_card(
-            cards_outer, "CYCLOTORSION / IRIS", "OffsetHeader.TLabel", 4, 0, 2
+            cards_outer, "CYCLOTORSION / IRIS", "OffsetHeader.TLabel", 3, 0, 2
         )
         self._iris_vars: Dict[str, tk.StringVar] = {}
         self._iris_vars["status"] = add_row(iris_frame, "Status:")
