@@ -1,0 +1,1254 @@
+[
+  {
+    "inventory": {
+      "filename": "20250218_232912A.mp4",
+      "resolution": [
+        1920,
+        1080
+      ],
+      "fps": 60.00797448165869,
+      "frame_count": 6923,
+      "duration_s": 115.368,
+      "codec": "h264",
+      "file_size_mb": 373.83271408081055
+    },
+    "summary": {
+      "total_frames_sampled": 24,
+      "pupil_success": 24,
+      "limbus_success": 15,
+      "iris_success": 15,
+      "iris_skip": 4
+    },
+    "frames": [
+      {
+        "frame_index": 0,
+        "timestamp_s": 0.0,
+        "pupil_detected": true,
+        "pupil_confidence": 0.525,
+        "pupil_center": [
+          1442.6162147781213,
+          648.0779477947168
+        ],
+        "limbus_detected": true,
+        "limbus_confidence": 0.6720000000000002,
+        "limbus_center": [
+          1444.6527455221367,
+          643.1947829994248
+        ],
+        "has_both": true,
+        "iris_status": "OK",
+        "iris_features": 29,
+        "iris_coverage": 0.005636347774687582,
+        "iris_spatial_spread": 27.080649501476056,
+        "pupil_ms": 12443.406699982006,
+        "limbus_ms": 0.0,
+        "iris_ms": 1610.3810999775305,
+        "total_ms": 14054.512600007001,
+        "failure_reason": ""
+      },
+      {
+        "frame_index": 1,
+        "timestamp_s": 0.016664451827242525,
+        "pupil_detected": true,
+        "pupil_confidence": 0.525,
+        "pupil_center": [
+          1442.7205169792678,
+          648.2775537033269
+        ],
+        "limbus_detected": true,
+        "limbus_confidence": 0.6720000000000002,
+        "limbus_center": [
+          1449.621600696285,
+          636.893448500344
+        ],
+        "has_both": true,
+        "iris_status": "OK",
+        "iris_features": 33,
+        "iris_coverage": 0.006049371766245569,
+        "iris_spatial_spread": 22.08365586271288,
+        "pupil_ms": 8384.414599975571,
+        "limbus_ms": 0.0,
+        "iris_ms": 1103.3007000223733,
+        "total_ms": 9488.247499975841,
+        "failure_reason": ""
+      },
+      {
+        "frame_index": 2,
+        "timestamp_s": 0.03332890365448505,
+        "pupil_detected": true,
+        "pupil_confidence": 0.525,
+        "pupil_center": [
+          1462.6995623431128,
+          654.3169376533813
+        ],
+        "limbus_detected": true,
+        "limbus_confidence": 0.6720000000000002,
+        "limbus_center": [
+          1443.3448767929333,
+          646.0781543288122
+        ],
+        "has_both": true,
+        "iris_status": "OK",
+        "iris_features": 31,
+        "iris_coverage": 0.00592670133108845,
+        "iris_spatial_spread": 23.606023851135824,
+        "pupil_ms": 9690.50560001051,
+        "limbus_ms": 0.0,
+        "iris_ms": 1383.842499984894,
+        "total_ms": 11075.008699961472,
+        "failure_reason": ""
+      },
+      {
+        "frame_index": 364,
+        "timestamp_s": 6.065860465116279,
+        "pupil_detected": true,
+        "pupil_confidence": 0.525,
+        "pupil_center": [
+          1566.5460855580418,
+          616.7683532564528
+        ],
+        "limbus_detected": true,
+        "limbus_confidence": 0.6720000000000002,
+        "limbus_center": [
+          1583.7339839771842,
+          598.7216302018768
+        ],
+        "has_both": true,
+        "iris_status": "OK",
+        "iris_features": 72,
+        "iris_coverage": 0.014616171796444588,
+        "iris_spatial_spread": 18.54632413787771,
+        "pupil_ms": 11240.84959999891,
+        "limbus_ms": 0.0,
+        "iris_ms": 1716.4658000110649,
+        "total_ms": 12958.046900050249,
+        "failure_reason": ""
+      },
+      {
+        "frame_index": 728,
+        "timestamp_s": 12.131720930232557,
+        "pupil_detected": true,
+        "pupil_confidence": 0.5630693746885318,
+        "pupil_center": [
+          1431.7668445030693,
+          582.3059345965609
+        ],
+        "limbus_detected": false,
+        "limbus_confidence": 0.0,
+        "limbus_center": null,
+        "has_both": false,
+        "iris_status": "SKIPPED_NO_LIMBUS",
+        "iris_features": 0,
+        "iris_coverage": 0.0,
+        "iris_spatial_spread": null,
+        "pupil_ms": 26408.480200043414,
+        "limbus_ms": 0.0,
+        "iris_ms": 0.0,
+        "total_ms": 26408.51300000213,
+        "failure_reason": ""
+      },
+      {
+        "frame_index": 1092,
+        "timestamp_s": 18.197581395348838,
+        "pupil_detected": true,
+        "pupil_confidence": 0.5628583983976932,
+        "pupil_center": [
+          1435.5383398906772,
+          580.7404536171077
+        ],
+        "limbus_detected": false,
+        "limbus_confidence": 0.0,
+        "limbus_center": null,
+        "has_both": false,
+        "iris_status": "SKIPPED_NO_LIMBUS",
+        "iris_features": 0,
+        "iris_coverage": 0.0,
+        "iris_spatial_spread": null,
+        "pupil_ms": 28956.208600022364,
+        "limbus_ms": 0.0,
+        "iris_ms": 0.0,
+        "total_ms": 28956.235599995125,
+        "failure_reason": ""
+      },
+      {
+        "frame_index": 1457,
+        "timestamp_s": 24.280106312292357,
+        "pupil_detected": true,
+        "pupil_confidence": 0.5625665525026605,
+        "pupil_center": [
+          1434.8031808389635,
+          582.8284381989151
+        ],
+        "limbus_detected": false,
+        "limbus_confidence": 0.0,
+        "limbus_center": null,
+        "has_both": true,
+        "iris_status": "NOT_RUN",
+        "iris_features": 0,
+        "iris_coverage": 0.0,
+        "iris_spatial_spread": null,
+        "pupil_ms": 17217.215799959376,
+        "limbus_ms": 0.0,
+        "iris_ms": 0.0,
+        "total_ms": 17217.235499992967,
+        "failure_reason": ""
+      },
+      {
+        "frame_index": 1821,
+        "timestamp_s": 30.345966777408638,
+        "pupil_detected": true,
+        "pupil_confidence": 0.5627459773604128,
+        "pupil_center": [
+          1433.4770897647493,
+          582.4952878198247
+        ],
+        "limbus_detected": false,
+        "limbus_confidence": 0.0,
+        "limbus_center": null,
+        "has_both": false,
+        "iris_status": "SKIPPED_NO_LIMBUS",
+        "iris_features": 0,
+        "iris_coverage": 0.0,
+        "iris_spatial_spread": null,
+        "pupil_ms": 11191.214099992067,
+        "limbus_ms": 0.0,
+        "iris_ms": 0.0,
+        "total_ms": 11191.23060000129,
+        "failure_reason": ""
+      },
+      {
+        "frame_index": 2185,
+        "timestamp_s": 36.411827242524915,
+        "pupil_detected": true,
+        "pupil_confidence": 0.45021088780622187,
+        "pupil_center": [
+          1434.2475057533195,
+          582.121565872461
+        ],
+        "limbus_detected": false,
+        "limbus_confidence": 0.0,
+        "limbus_center": null,
+        "has_both": false,
+        "iris_status": "SKIPPED_NO_LIMBUS",
+        "iris_features": 0,
+        "iris_coverage": 0.0,
+        "iris_spatial_spread": null,
+        "pupil_ms": 12373.612600029446,
+        "limbus_ms": 0.0,
+        "iris_ms": 0.0,
+        "total_ms": 12373.633900017012,
+        "failure_reason": ""
+      },
+      {
+        "frame_index": 2550,
+        "timestamp_s": 42.49435215946844,
+        "pupil_detected": true,
+        "pupil_confidence": 0.525,
+        "pupil_center": [
+          1159.3959474522128,
+          716.4876960155115
+        ],
+        "limbus_detected": false,
+        "limbus_confidence": 0.0,
+        "limbus_center": null,
+        "has_both": true,
+        "iris_status": "NOT_RUN",
+        "iris_features": 0,
+        "iris_coverage": 0.0,
+        "iris_spatial_spread": null,
+        "pupil_ms": 5498.779400018975,
+        "limbus_ms": 0.0,
+        "iris_ms": 0.0,
+        "total_ms": 5498.790299985558,
+        "failure_reason": ""
+      },
+      {
+        "frame_index": 2914,
+        "timestamp_s": 48.560212624584715,
+        "pupil_detected": true,
+        "pupil_confidence": 0.525,
+        "pupil_center": [
+          1264.622898023487,
+          547.4566319066575
+        ],
+        "limbus_detected": true,
+        "limbus_confidence": 0.525,
+        "limbus_center": [
+          1303.1958311724827,
+          542.7408420657006
+        ],
+        "has_both": true,
+        "iris_status": "OK",
+        "iris_features": 72,
+        "iris_coverage": 0.008606744230382395,
+        "iris_spatial_spread": 18.828579108649436,
+        "pupil_ms": 4631.20100001106,
+        "limbus_ms": 0.0,
+        "iris_ms": 638.6614000075497,
+        "total_ms": 5270.204800006468,
+        "failure_reason": ""
+      },
+      {
+        "frame_index": 3278,
+        "timestamp_s": 54.626073089700995,
+        "pupil_detected": true,
+        "pupil_confidence": 0.525,
+        "pupil_center": [
+          1435.124711952511,
+          647.7244485181142
+        ],
+        "limbus_detected": true,
+        "limbus_confidence": 0.6720000000000002,
+        "limbus_center": [
+          1427.470955589036,
+          595.800786281391
+        ],
+        "has_both": true,
+        "iris_status": "OK",
+        "iris_features": 72,
+        "iris_coverage": 0.008448986142155609,
+        "iris_spatial_spread": 12.809752169080154,
+        "pupil_ms": 3528.3483999664895,
+        "limbus_ms": 0.0,
+        "iris_ms": 622.1676000277512,
+        "total_ms": 4150.851999991573,
+        "failure_reason": ""
+      },
+      {
+        "frame_index": 3643,
+        "timestamp_s": 60.708598006644515,
+        "pupil_detected": true,
+        "pupil_confidence": 0.798,
+        "pupil_center": [
+          1431.2805423550244,
+          602.5801195864549
+        ],
+        "limbus_detected": true,
+        "limbus_confidence": 0.8400000000000001,
+        "limbus_center": [
+          1430.768027061481,
+          589.1567677191747
+        ],
+        "has_both": true,
+        "iris_status": "OK",
+        "iris_features": 72,
+        "iris_coverage": 0.008647504366346311,
+        "iris_spatial_spread": 13.215392300356507,
+        "pupil_ms": 3390.9788000164554,
+        "limbus_ms": 0.0,
+        "iris_ms": 661.7923000012524,
+        "total_ms": 4053.1087000272237,
+        "failure_reason": ""
+      },
+      {
+        "frame_index": 4007,
+        "timestamp_s": 66.7744584717608,
+        "pupil_detected": true,
+        "pupil_confidence": 0.798,
+        "pupil_center": [
+          1432.618116277749,
+          602.7302363634788
+        ],
+        "limbus_detected": true,
+        "limbus_confidence": 0.42000000000000004,
+        "limbus_center": [
+          1430.359677921097,
+          589.1551923557265
+        ],
+        "has_both": true,
+        "iris_status": "OK",
+        "iris_features": 72,
+        "iris_coverage": 0.008952016189627076,
+        "iris_spatial_spread": 10.66250260942815,
+        "pupil_ms": 3439.007800014224,
+        "limbus_ms": 0.0,
+        "iris_ms": 627.5880000321195,
+        "total_ms": 4066.9998999801464,
+        "failure_reason": ""
+      },
+      {
+        "frame_index": 4371,
+        "timestamp_s": 72.84031893687708,
+        "pupil_detected": true,
+        "pupil_confidence": 0.798,
+        "pupil_center": [
+          1431.095244358809,
+          601.3486883106868
+        ],
+        "limbus_detected": true,
+        "limbus_confidence": 0.8400000000000001,
+        "limbus_center": [
+          1430.394265219262,
+          587.1163371114759
+        ],
+        "has_both": true,
+        "iris_status": "OK",
+        "iris_features": 72,
+        "iris_coverage": 0.008774599541717993,
+        "iris_spatial_spread": 7.453997966194764,
+        "pupil_ms": 4108.889699971769,
+        "limbus_ms": 0.0,
+        "iris_ms": 563.8623000122607,
+        "total_ms": 4673.111899988726,
+        "failure_reason": ""
+      },
+      {
+        "frame_index": 4736,
+        "timestamp_s": 78.9228438538206,
+        "pupil_detected": true,
+        "pupil_confidence": 0.798,
+        "pupil_center": [
+          1432.1717616254107,
+          601.3318966873275
+        ],
+        "limbus_detected": true,
+        "limbus_confidence": 0.8400000000000001,
+        "limbus_center": [
+          1430.511103904999,
+          587.3036077725504
+        ],
+        "has_both": true,
+        "iris_status": "OK",
+        "iris_features": 72,
+        "iris_coverage": 0.008963960946701979,
+        "iris_spatial_spread": 7.883631802207214,
+        "pupil_ms": 3878.7649999721907,
+        "limbus_ms": 0.0,
+        "iris_ms": 552.1068999660201,
+        "total_ms": 4431.229699985124,
+        "failure_reason": ""
+      },
+      {
+        "frame_index": 5100,
+        "timestamp_s": 84.98870431893688,
+        "pupil_detected": true,
+        "pupil_confidence": 0.798,
+        "pupil_center": [
+          1429.3385947311724,
+          600.8109498602503
+        ],
+        "limbus_detected": true,
+        "limbus_confidence": 0.8400000000000001,
+        "limbus_center": [
+          1429.0044067661802,
+          585.729681236501
+        ],
+        "has_both": true,
+        "iris_status": "OK",
+        "iris_features": 72,
+        "iris_coverage": 0.009117322094141494,
+        "iris_spatial_spread": 6.098504599276078,
+        "pupil_ms": 3345.323199988343,
+        "limbus_ms": 0.0,
+        "iris_ms": 632.3343000258319,
+        "total_ms": 3978.0373999965377,
+        "failure_reason": ""
+      },
+      {
+        "frame_index": 5464,
+        "timestamp_s": 91.05456478405316,
+        "pupil_detected": true,
+        "pupil_confidence": 0.9974999999999999,
+        "pupil_center": [
+          1429.470268865818,
+          601.387329653991
+        ],
+        "limbus_detected": true,
+        "limbus_confidence": 0.8400000000000001,
+        "limbus_center": [
+          1430.7681494372712,
+          587.6856630230324
+        ],
+        "has_both": true,
+        "iris_status": "OK",
+        "iris_features": 72,
+        "iris_coverage": 0.009107623381078055,
+        "iris_spatial_spread": 5.821298746303705,
+        "pupil_ms": 3253.039199975319,
+        "limbus_ms": 0.0,
+        "iris_ms": 557.1894000167958,
+        "total_ms": 3810.596799943596,
+        "failure_reason": ""
+      },
+      {
+        "frame_index": 5829,
+        "timestamp_s": 97.13708970099668,
+        "pupil_detected": true,
+        "pupil_confidence": 0.798,
+        "pupil_center": [
+          1429.074824916045,
+          604.4601989435577
+        ],
+        "limbus_detected": true,
+        "limbus_confidence": 0.8400000000000001,
+        "limbus_center": [
+          1430.8394871832468,
+          586.9567149484267
+        ],
+        "has_both": true,
+        "iris_status": "OK",
+        "iris_features": 72,
+        "iris_coverage": 0.009182647178684519,
+        "iris_spatial_spread": 5.302524077495853,
+        "pupil_ms": 3327.6084999670275,
+        "limbus_ms": 0.0,
+        "iris_ms": 452.9606999712996,
+        "total_ms": 3780.8734999853186,
+        "failure_reason": ""
+      },
+      {
+        "frame_index": 6193,
+        "timestamp_s": 103.20295016611296,
+        "pupil_detected": true,
+        "pupil_confidence": 0.798,
+        "pupil_center": [
+          1428.354475013515,
+          602.9687478930275
+        ],
+        "limbus_detected": true,
+        "limbus_confidence": 0.8400000000000001,
+        "limbus_center": [
+          1429.2065187753005,
+          586.4553257524444
+        ],
+        "has_both": true,
+        "iris_status": "OK",
+        "iris_features": 68,
+        "iris_coverage": 0.008703506077572365,
+        "iris_spatial_spread": 7.04451706727458,
+        "pupil_ms": 3352.032099966891,
+        "limbus_ms": 0.0,
+        "iris_ms": 397.7137000183575,
+        "total_ms": 3750.0196999753825,
+        "failure_reason": ""
+      },
+      {
+        "frame_index": 6557,
+        "timestamp_s": 109.26881063122923,
+        "pupil_detected": true,
+        "pupil_confidence": 0.798,
+        "pupil_center": [
+          1426.7920087657783,
+          605.0964111241416
+        ],
+        "limbus_detected": true,
+        "limbus_confidence": 0.8400000000000001,
+        "limbus_center": [
+          1430.408881158479,
+          589.0244187394239
+        ],
+        "has_both": true,
+        "iris_status": "OK",
+        "iris_features": 66,
+        "iris_coverage": 0.008440005193090473,
+        "iris_spatial_spread": 4.924147367978593,
+        "pupil_ms": 3147.4965999950655,
+        "limbus_ms": 0.0,
+        "iris_ms": 414.34529999969527,
+        "total_ms": 3562.121400027536,
+        "failure_reason": ""
+      },
+      {
+        "frame_index": 6920,
+        "timestamp_s": 115.31800664451828,
+        "pupil_detected": true,
+        "pupil_confidence": 0.525,
+        "pupil_center": [
+          1710.7562824689003,
+          510.87622172538926
+        ],
+        "limbus_detected": false,
+        "limbus_confidence": 0.0,
+        "limbus_center": null,
+        "has_both": true,
+        "iris_status": "NOT_RUN",
+        "iris_features": 0,
+        "iris_coverage": 0.0,
+        "iris_spatial_spread": null,
+        "pupil_ms": 5119.450799946208,
+        "limbus_ms": 0.0,
+        "iris_ms": 0.0,
+        "total_ms": 5119.470899982844,
+        "failure_reason": ""
+      },
+      {
+        "frame_index": 6921,
+        "timestamp_s": 115.33467109634552,
+        "pupil_detected": true,
+        "pupil_confidence": 0.525,
+        "pupil_center": [
+          1695.816195456765,
+          515.2597703538232
+        ],
+        "limbus_detected": false,
+        "limbus_confidence": 0.0,
+        "limbus_center": null,
+        "has_both": true,
+        "iris_status": "NOT_RUN",
+        "iris_features": 0,
+        "iris_coverage": 0.0,
+        "iris_spatial_spread": null,
+        "pupil_ms": 5279.518500028644,
+        "limbus_ms": 0.0,
+        "iris_ms": 0.0,
+        "total_ms": 5279.536999994889,
+        "failure_reason": ""
+      },
+      {
+        "frame_index": 6922,
+        "timestamp_s": 115.35133554817276,
+        "pupil_detected": true,
+        "pupil_confidence": 0.525,
+        "pupil_center": [
+          1695.5159254386351,
+          515.184739472017
+        ],
+        "limbus_detected": false,
+        "limbus_confidence": 0.0,
+        "limbus_center": null,
+        "has_both": true,
+        "iris_status": "NOT_RUN",
+        "iris_features": 0,
+        "iris_coverage": 0.0,
+        "iris_spatial_spread": null,
+        "pupil_ms": 5509.511299955193,
+        "limbus_ms": 0.0,
+        "iris_ms": 0.0,
+        "total_ms": 5509.521599975415,
+        "failure_reason": ""
+      }
+    ]
+  },
+  {
+    "inventory": {
+      "filename": "20250218_233210A.mp4",
+      "resolution": [
+        1920,
+        1080
+      ],
+      "fps": 60.01186151679146,
+      "frame_count": 4857,
+      "duration_s": 80.934,
+      "codec": "h264",
+      "file_size_mb": 243.38619995117188
+    },
+    "summary": {
+      "total_frames_sampled": 24,
+      "pupil_success": 24,
+      "limbus_success": 19,
+      "iris_success": 19,
+      "iris_skip": 1
+    },
+    "frames": [
+      {
+        "frame_index": 0,
+        "timestamp_s": 0.0,
+        "pupil_detected": true,
+        "pupil_confidence": 0.525,
+        "pupil_center": [
+          1379.452531868581,
+          667.5638822790767
+        ],
+        "limbus_detected": true,
+        "limbus_confidence": 0.6720000000000002,
+        "limbus_center": [
+          1373.979939934942,
+          651.0361167808007
+        ],
+        "has_both": true,
+        "iris_status": "OK",
+        "iris_features": 23,
+        "iris_coverage": 0.003948683647848156,
+        "iris_spatial_spread": 25.276336143794023,
+        "pupil_ms": 2892.522799957078,
+        "limbus_ms": 0.0,
+        "iris_ms": 378.38440004270524,
+        "total_ms": 3271.045100002084,
+        "failure_reason": ""
+      },
+      {
+        "frame_index": 1,
+        "timestamp_s": 0.016663372452130943,
+        "pupil_detected": true,
+        "pupil_confidence": 0.525,
+        "pupil_center": [
+          1376.8013526481416,
+          667.2835830716203
+        ],
+        "limbus_detected": true,
+        "limbus_confidence": 0.6720000000000002,
+        "limbus_center": [
+          1367.9444577300037,
+          656.4919656965652
+        ],
+        "has_both": true,
+        "iris_status": "OK",
+        "iris_features": 22,
+        "iris_coverage": 0.0036799014974313394,
+        "iris_spatial_spread": 39.62068146989699,
+        "pupil_ms": 2037.8556000068784,
+        "limbus_ms": 0.0,
+        "iris_ms": 366.5976999909617,
+        "total_ms": 2404.7251000301912,
+        "failure_reason": ""
+      },
+      {
+        "frame_index": 2,
+        "timestamp_s": 0.033326744904261886,
+        "pupil_detected": true,
+        "pupil_confidence": 0.525,
+        "pupil_center": [
+          1376.8705135991704,
+          667.3123942611312
+        ],
+        "limbus_detected": true,
+        "limbus_confidence": 0.6720000000000002,
+        "limbus_center": [
+          1368.3726675631706,
+          655.3408280475743
+        ],
+        "has_both": true,
+        "iris_status": "OK",
+        "iris_features": 24,
+        "iris_coverage": 0.00405679408179459,
+        "iris_spatial_spread": 35.80054772431523,
+        "pupil_ms": 2288.5144999600016,
+        "limbus_ms": 0.0,
+        "iris_ms": 396.01919997949153,
+        "total_ms": 2684.7841999842785,
+        "failure_reason": ""
+      },
+      {
+        "frame_index": 255,
+        "timestamp_s": 4.249159975293391,
+        "pupil_detected": true,
+        "pupil_confidence": 0.525,
+        "pupil_center": [
+          1543.660801605399,
+          643.6633856477707
+        ],
+        "limbus_detected": true,
+        "limbus_confidence": 0.42000000000000004,
+        "limbus_center": [
+          1524.7421242435896,
+          638.2677798719451
+        ],
+        "has_both": true,
+        "iris_status": "OK",
+        "iris_features": 72,
+        "iris_coverage": 0.010019273050522765,
+        "iris_spatial_spread": 25.41830553879119,
+        "pupil_ms": 2415.565399976913,
+        "limbus_ms": 0.0,
+        "iris_ms": 412.3686000239104,
+        "total_ms": 2828.2181000104174,
+        "failure_reason": ""
+      },
+      {
+        "frame_index": 511,
+        "timestamp_s": 8.514983323038912,
+        "pupil_detected": true,
+        "pupil_confidence": 0.5632573674244383,
+        "pupil_center": [
+          1434.1867899461247,
+          580.7349946063172
+        ],
+        "limbus_detected": false,
+        "limbus_confidence": 0.0,
+        "limbus_center": null,
+        "has_both": false,
+        "iris_status": "SKIPPED_NO_LIMBUS",
+        "iris_features": 0,
+        "iris_coverage": 0.0,
+        "iris_spatial_spread": null,
+        "pupil_ms": 9174.782700021751,
+        "limbus_ms": 0.0,
+        "iris_ms": 0.0,
+        "total_ms": 9174.801099987235,
+        "failure_reason": ""
+      },
+      {
+        "frame_index": 766,
+        "timestamp_s": 12.764143298332304,
+        "pupil_detected": true,
+        "pupil_confidence": 0.525,
+        "pupil_center": [
+          1436.9106332931658,
+          416.3011070731306
+        ],
+        "limbus_detected": false,
+        "limbus_confidence": 0.0,
+        "limbus_center": null,
+        "has_both": true,
+        "iris_status": "NOT_RUN",
+        "iris_features": 0,
+        "iris_coverage": 0.0,
+        "iris_spatial_spread": null,
+        "pupil_ms": 3270.2664000098594,
+        "limbus_ms": 0.0,
+        "iris_ms": 0.0,
+        "total_ms": 3270.2735000057146,
+        "failure_reason": ""
+      },
+      {
+        "frame_index": 1022,
+        "timestamp_s": 17.029966646077824,
+        "pupil_detected": true,
+        "pupil_confidence": 0.525,
+        "pupil_center": [
+          1460.7362369707898,
+          602.6095286888395
+        ],
+        "limbus_detected": true,
+        "limbus_confidence": 0.42000000000000004,
+        "limbus_center": [
+          1444.790839673396,
+          582.8604673013834
+        ],
+        "has_both": true,
+        "iris_status": "OK",
+        "iris_features": 72,
+        "iris_coverage": 0.007674892035860379,
+        "iris_spatial_spread": 10.580382828603154,
+        "pupil_ms": 2570.5772999790497,
+        "limbus_ms": 0.0,
+        "iris_ms": 442.5863000215031,
+        "total_ms": 3013.6618000105955,
+        "failure_reason": ""
+      },
+      {
+        "frame_index": 1277,
+        "timestamp_s": 21.279126621371216,
+        "pupil_detected": true,
+        "pupil_confidence": 0.8400000000000001,
+        "pupil_center": [
+          1449.4398167013594,
+          578.1285775128418
+        ],
+        "limbus_detected": true,
+        "limbus_confidence": 0.42000000000000004,
+        "limbus_center": [
+          1450.4496137780861,
+          581.155868105975
+        ],
+        "has_both": true,
+        "iris_status": "OK",
+        "iris_features": 72,
+        "iris_coverage": 0.00723534169560008,
+        "iris_spatial_spread": 23.250540513964722,
+        "pupil_ms": 2470.43579997262,
+        "limbus_ms": 0.0,
+        "iris_ms": 449.48730000760406,
+        "total_ms": 2920.124099997338,
+        "failure_reason": ""
+      },
+      {
+        "frame_index": 1533,
+        "timestamp_s": 25.544949969116736,
+        "pupil_detected": true,
+        "pupil_confidence": 0.525,
+        "pupil_center": [
+          1449.5773145317687,
+          597.4591445004091
+        ],
+        "limbus_detected": true,
+        "limbus_confidence": 0.525,
+        "limbus_center": [
+          1459.9675593929708,
+          600.0659442309491
+        ],
+        "has_both": true,
+        "iris_status": "OK",
+        "iris_features": 72,
+        "iris_coverage": 0.008304722343426123,
+        "iris_spatial_spread": 21.465023676356644,
+        "pupil_ms": 2408.646299969405,
+        "limbus_ms": 0.0,
+        "iris_ms": 384.84700000844896,
+        "total_ms": 2794.2999000079,
+        "failure_reason": ""
+      },
+      {
+        "frame_index": 1789,
+        "timestamp_s": 29.81077331686226,
+        "pupil_detected": true,
+        "pupil_confidence": 0.525,
+        "pupil_center": [
+          1442.161367510469,
+          603.0534063229773
+        ],
+        "limbus_detected": true,
+        "limbus_confidence": 0.42000000000000004,
+        "limbus_center": [
+          1423.9513212048698,
+          594.806898495411
+        ],
+        "has_both": true,
+        "iris_status": "OK",
+        "iris_features": 72,
+        "iris_coverage": 0.008624803261506374,
+        "iris_spatial_spread": 11.73968645569984,
+        "pupil_ms": 2648.355199955404,
+        "limbus_ms": 0.0,
+        "iris_ms": 522.1698000095785,
+        "total_ms": 3170.7495999871753,
+        "failure_reason": ""
+      },
+      {
+        "frame_index": 2044,
+        "timestamp_s": 34.05993329215565,
+        "pupil_detected": true,
+        "pupil_confidence": 0.525,
+        "pupil_center": [
+          1436.3561043918412,
+          609.7111104235811
+        ],
+        "limbus_detected": true,
+        "limbus_confidence": 0.42000000000000004,
+        "limbus_center": [
+          1412.6717690718483,
+          599.936659311046
+        ],
+        "has_both": true,
+        "iris_status": "OK",
+        "iris_features": 72,
+        "iris_coverage": 0.008256968245432792,
+        "iris_spatial_spread": 9.49003520194995,
+        "pupil_ms": 2472.911299963016,
+        "limbus_ms": 0.0,
+        "iris_ms": 463.49049999844283,
+        "total_ms": 2936.9206999544986,
+        "failure_reason": ""
+      },
+      {
+        "frame_index": 2300,
+        "timestamp_s": 38.32575663990117,
+        "pupil_detected": true,
+        "pupil_confidence": 0.525,
+        "pupil_center": [
+          1436.7657902250428,
+          610.1363983789836
+        ],
+        "limbus_detected": true,
+        "limbus_confidence": 0.42000000000000004,
+        "limbus_center": [
+          1421.9845758143783,
+          595.3934844736341
+        ],
+        "has_both": true,
+        "iris_status": "OK",
+        "iris_features": 72,
+        "iris_coverage": 0.008735134908986869,
+        "iris_spatial_spread": 10.297240941110552,
+        "pupil_ms": 2490.7033999916166,
+        "limbus_ms": 0.0,
+        "iris_ms": 366.9219000148587,
+        "total_ms": 2857.792700000573,
+        "failure_reason": ""
+      },
+      {
+        "frame_index": 2555,
+        "timestamp_s": 42.57491661519456,
+        "pupil_detected": true,
+        "pupil_confidence": 0.525,
+        "pupil_center": [
+          1435.9782294236636,
+          610.2820269278554
+        ],
+        "limbus_detected": true,
+        "limbus_confidence": 0.6720000000000002,
+        "limbus_center": [
+          1425.0529557291222,
+          588.543497356415
+        ],
+        "has_both": true,
+        "iris_status": "OK",
+        "iris_features": 72,
+        "iris_coverage": 0.009119353775480754,
+        "iris_spatial_spread": 19.27403762741217,
+        "pupil_ms": 2174.573500000406,
+        "limbus_ms": 0.0,
+        "iris_ms": 407.59840002283454,
+        "total_ms": 2582.476500014309,
+        "failure_reason": ""
+      },
+      {
+        "frame_index": 2811,
+        "timestamp_s": 46.840739962940084,
+        "pupil_detected": true,
+        "pupil_confidence": 0.525,
+        "pupil_center": [
+          1435.7477837886101,
+          610.4815160821195
+        ],
+        "limbus_detected": true,
+        "limbus_confidence": 0.6720000000000002,
+        "limbus_center": [
+          1424.8553004218118,
+          587.9147193286599
+        ],
+        "has_both": true,
+        "iris_status": "OK",
+        "iris_features": 72,
+        "iris_coverage": 0.009178861916237343,
+        "iris_spatial_spread": 19.080275929121452,
+        "pupil_ms": 2698.620299983304,
+        "limbus_ms": 0.0,
+        "iris_ms": 593.685700034257,
+        "total_ms": 3292.734299961012,
+        "failure_reason": ""
+      },
+      {
+        "frame_index": 3066,
+        "timestamp_s": 51.08989993823347,
+        "pupil_detected": true,
+        "pupil_confidence": 0.525,
+        "pupil_center": [
+          1435.859600177634,
+          610.294311940102
+        ],
+        "limbus_detected": true,
+        "limbus_confidence": 0.42000000000000004,
+        "limbus_center": [
+          1425.018712433561,
+          586.3193620226588
+        ],
+        "has_both": true,
+        "iris_status": "OK",
+        "iris_features": 72,
+        "iris_coverage": 0.009270029851417925,
+        "iris_spatial_spread": 18.532851567096607,
+        "pupil_ms": 2866.2763999891467,
+        "limbus_ms": 0.0,
+        "iris_ms": 486.9904000079259,
+        "total_ms": 3353.671699995175,
+        "failure_reason": ""
+      },
+      {
+        "frame_index": 3322,
+        "timestamp_s": 55.355723285978996,
+        "pupil_detected": true,
+        "pupil_confidence": 0.525,
+        "pupil_center": [
+          1430.819797905393,
+          610.7909685211756
+        ],
+        "limbus_detected": true,
+        "limbus_confidence": 0.525,
+        "limbus_center": [
+          1428.9620687483873,
+          603.6000025761882
+        ],
+        "has_both": true,
+        "iris_status": "OK",
+        "iris_features": 72,
+        "iris_coverage": 0.007431188683236073,
+        "iris_spatial_spread": 26.62053326695368,
+        "pupil_ms": 2612.6038000220433,
+        "limbus_ms": 0.0,
+        "iris_ms": 256.71169999986887,
+        "total_ms": 2869.4855000358075,
+        "failure_reason": ""
+      },
+      {
+        "frame_index": 3578,
+        "timestamp_s": 59.62154663372452,
+        "pupil_detected": true,
+        "pupil_confidence": 0.525,
+        "pupil_center": [
+          1432.3106924669714,
+          612.7658013869572
+        ],
+        "limbus_detected": true,
+        "limbus_confidence": 0.42000000000000004,
+        "limbus_center": [
+          1424.8766061315878,
+          590.5669491839731
+        ],
+        "has_both": true,
+        "iris_status": "OK",
+        "iris_features": 72,
+        "iris_coverage": 0.009130881957155636,
+        "iris_spatial_spread": 19.688274089294314,
+        "pupil_ms": 2058.179400046356,
+        "limbus_ms": 0.0,
+        "iris_ms": 408.1822999869473,
+        "total_ms": 2466.783400042914,
+        "failure_reason": ""
+      },
+      {
+        "frame_index": 3833,
+        "timestamp_s": 63.87070660901791,
+        "pupil_detected": true,
+        "pupil_confidence": 0.525,
+        "pupil_center": [
+          1432.1066191170898,
+          612.7194249995362
+        ],
+        "limbus_detected": true,
+        "limbus_confidence": 0.6720000000000002,
+        "limbus_center": [
+          1425.5180037723699,
+          590.9449804605107
+        ],
+        "has_both": true,
+        "iris_status": "OK",
+        "iris_features": 72,
+        "iris_coverage": 0.009100604923856694,
+        "iris_spatial_spread": 19.01184070187618,
+        "pupil_ms": 2059.029500000179,
+        "limbus_ms": 0.0,
+        "iris_ms": 358.0647999770008,
+        "total_ms": 2417.540700000245,
+        "failure_reason": ""
+      },
+      {
+        "frame_index": 4089,
+        "timestamp_s": 68.13652995676343,
+        "pupil_detected": true,
+        "pupil_confidence": 0.525,
+        "pupil_center": [
+          1432.1867175798216,
+          612.435407438141
+        ],
+        "limbus_detected": true,
+        "limbus_confidence": 0.6720000000000002,
+        "limbus_center": [
+          1425.0695443534319,
+          589.6931418043661
+        ],
+        "has_both": true,
+        "iris_status": "OK",
+        "iris_features": 72,
+        "iris_coverage": 0.00914481054763957,
+        "iris_spatial_spread": 17.593952014965684,
+        "pupil_ms": 2099.57179997582,
+        "limbus_ms": 0.0,
+        "iris_ms": 272.59630005573854,
+        "total_ms": 2372.3295999807306,
+        "failure_reason": ""
+      },
+      {
+        "frame_index": 4344,
+        "timestamp_s": 72.38568993205682,
+        "pupil_detected": true,
+        "pupil_confidence": 0.525,
+        "pupil_center": [
+          1433.1415959727328,
+          612.5681339227208
+        ],
+        "limbus_detected": true,
+        "limbus_confidence": 0.6720000000000002,
+        "limbus_center": [
+          1423.9827885507455,
+          588.8169269564185
+        ],
+        "has_both": true,
+        "iris_status": "OK",
+        "iris_features": 71,
+        "iris_coverage": 0.009050823308600383,
+        "iris_spatial_spread": 21.143132983917955,
+        "pupil_ms": 2275.4344000131823,
+        "limbus_ms": 0.0,
+        "iris_ms": 258.01590003538877,
+        "total_ms": 2533.8605000288226,
+        "failure_reason": ""
+      },
+      {
+        "frame_index": 4600,
+        "timestamp_s": 76.65151327980234,
+        "pupil_detected": true,
+        "pupil_confidence": 0.525,
+        "pupil_center": [
+          1429.6537540214874,
+          608.8883368551632
+        ],
+        "limbus_detected": true,
+        "limbus_confidence": 0.525,
+        "limbus_center": [
+          1428.0747182234131,
+          608.4376598280487
+        ],
+        "has_both": true,
+        "iris_status": "OK",
+        "iris_features": 72,
+        "iris_coverage": 0.007354181937349276,
+        "iris_spatial_spread": 21.85365632525378,
+        "pupil_ms": 1663.681500009261,
+        "limbus_ms": 0.0,
+        "iris_ms": 204.38280003145337,
+        "total_ms": 1868.2331000454724,
+        "failure_reason": ""
+      },
+      {
+        "frame_index": 4854,
+        "timestamp_s": 80.8840098826436,
+        "pupil_detected": true,
+        "pupil_confidence": 0.525,
+        "pupil_center": [
+          1391.2984016148948,
+          631.3327599283366
+        ],
+        "limbus_detected": false,
+        "limbus_confidence": 0.0,
+        "limbus_center": null,
+        "has_both": true,
+        "iris_status": "NOT_RUN",
+        "iris_features": 0,
+        "iris_coverage": 0.0,
+        "iris_spatial_spread": null,
+        "pupil_ms": 1982.2606000234373,
+        "limbus_ms": 0.0,
+        "iris_ms": 0.0,
+        "total_ms": 1982.2646000538953,
+        "failure_reason": ""
+      },
+      {
+        "frame_index": 4855,
+        "timestamp_s": 80.90067325509574,
+        "pupil_detected": true,
+        "pupil_confidence": 0.9974999999999999,
+        "pupil_center": [
+          1380.8335457443227,
+          633.1764172046715
+        ],
+        "limbus_detected": false,
+        "limbus_confidence": 0.0,
+        "limbus_center": null,
+        "has_both": true,
+        "iris_status": "NOT_RUN",
+        "iris_features": 0,
+        "iris_coverage": 0.0,
+        "iris_spatial_spread": null,
+        "pupil_ms": 1910.6451999978162,
+        "limbus_ms": 0.0,
+        "iris_ms": 0.0,
+        "total_ms": 1910.6503000366502,
+        "failure_reason": ""
+      },
+      {
+        "frame_index": 4856,
+        "timestamp_s": 80.91733662754787,
+        "pupil_detected": true,
+        "pupil_confidence": 0.798,
+        "pupil_center": [
+          1380.1358031377308,
+          633.962847768365
+        ],
+        "limbus_detected": false,
+        "limbus_confidence": 0.0,
+        "limbus_center": null,
+        "has_both": true,
+        "iris_status": "NOT_RUN",
+        "iris_features": 0,
+        "iris_coverage": 0.0,
+        "iris_spatial_spread": null,
+        "pupil_ms": 2088.590200000908,
+        "limbus_ms": 0.0,
+        "iris_ms": 0.0,
+        "total_ms": 2088.596800051164,
+        "failure_reason": ""
+      }
+    ]
+  }
+]
