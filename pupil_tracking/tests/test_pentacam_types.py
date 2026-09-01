@@ -215,3 +215,110 @@ class TestEdgeCases:
         d = r.to_dict()
         assert d["valid"] is False
         assert d["status"] == "NO_IMAGE"
+
+
+# ── Cross-System Registration Types ─────────────────────────────────
+
+from pupil_tracking.pentacam.cross_system import (
+    CrossSystemRegistrationInput,
+    CrossSystemRegistrationResult,
+    RegistrationFailureKind,
+    TransformationModel,
+)
+
+
+class TestCrossSystemRegistrationInput:
+    def test_empty_input(self):
+        inp = CrossSystemRegistrationInput()
+        d = inp.to_dict()
+        assert d["has_pentacam"] is False
+        assert d["has_elita_supine"] is False
+
+    def test_with_pentacam(self):
+        pentacam = make_synthetic_detection_result()
+        inp = CrossSystemRegistrationInput(pentacam=pentacam)
+        d = inp.to_dict()
+        assert d["has_pentacam"] is True
+        assert d["has_elita_supine"] is False
+
+    def test_coordinate_systems(self):
+        inp = CrossSystemRegistrationInput(
+            pentacam_coordinate_system="test_coord",
+            elita_coordinate_system="elita_pixel",
+        )
+        d = inp.to_dict()
+        assert d["pentacam_coordinate_system"] == "test_coord"
+
+
+class TestCrossSystemRegistrationResult:
+    def test_empty_result(self):
+        r = CrossSystemRegistrationResult()
+        d = r.to_dict()
+        assert d["valid"] is False
+        assert d["failure"] == "NO_PENTACAM"
+
+    def test_successful_registration(self):
+        r = CrossSystemRegistrationResult(
+            valid=True,
+            failure=RegistrationFailureKind.OK,
+            transformation_model=TransformationModel.SIMILARITY_2D,
+            rotation_deg=5.0,
+            translation_x=10.0,
+            translation_y=-5.0,
+            scale=1.02,
+            n_correspondences=20,
+            n_inliers=18,
+            inlier_fraction=0.9,
+            confidence=0.85,
+        )
+        d = r.to_dict()
+        assert d["valid"] is True
+        assert d["failure"] == "OK"
+        assert d["rotation_deg"] == 5.0
+        assert d["n_inliers"] == 18
+
+    def test_with_transform_matrix(self):
+        mat = np.array([[1.0, 0.0, 10.0], [0.0, 1.0, -5.0]])
+        r = CrossSystemRegistrationResult(
+            valid=True,
+            transform_matrix=mat,
+        )
+        d = r.to_dict()
+        assert "transform_matrix" in d
+        assert len(d["transform_matrix"]) == 2
+
+    def test_with_cyclotorsion_composition(self):
+        r = CrossSystemRegistrationResult(
+            valid=True,
+            rotation_deg=3.0,
+            elita_cyclotorsion_deg=2.5,
+            final_sitting_to_supine_deg=5.5,
+        )
+        d = r.to_dict()
+        assert d["final_sitting_to_supine_deg"] == 5.5
+
+    def test_failure_kinds(self):
+        for kind in RegistrationFailureKind:
+            r = CrossSystemRegistrationResult(failure=kind)
+            d = r.to_dict()
+            assert d["failure"] == kind.value
+
+    def test_transformation_models(self):
+        for model in TransformationModel:
+            r = CrossSystemRegistrationResult(transformation_model=model)
+            d = r.to_dict()
+            assert d["transformation_model"] == model.value
+
+    def test_json_round_trip(self):
+        r = CrossSystemRegistrationResult(
+            valid=True,
+            failure=RegistrationFailureKind.OK,
+            rotation_deg=7.5,
+            confidence=0.9,
+        )
+        import json
+        d = r.to_dict()
+        json_str = json.dumps(d)
+        loaded = json.loads(json_str)
+        assert loaded["valid"] is True
+        assert loaded["rotation_deg"] == 7.5
