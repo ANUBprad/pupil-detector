@@ -473,6 +473,9 @@ def _refine_contour_subpixel(
     use_multiscale: bool = True,
     interpolation_step: float = 0.25,
     use_parabolic: bool = True,
+    cached_grad_mag: Optional[np.ndarray] = None,
+    cached_grad_x: Optional[np.ndarray] = None,
+    cached_grad_y: Optional[np.ndarray] = None,
 ) -> np.ndarray:
     """Refine contour points to sub-pixel accuracy using gradient maxima.
 
@@ -501,6 +504,12 @@ def _refine_contour_subpixel(
         Sampling step in pixels along the normal.
     use_parabolic : bool
         Fit parabola to the 3 points around the gradient peak.
+    cached_grad_mag : np.ndarray, optional
+        Pre-computed gradient magnitude (avoids recomputation).
+    cached_grad_x : np.ndarray, optional
+        Pre-computed fine-scale gradient X (avoids recomputation).
+    cached_grad_y : np.ndarray, optional
+        Pre-computed fine-scale gradient Y (avoids recomputation).
 
     Returns
     -------
@@ -510,8 +519,12 @@ def _refine_contour_subpixel(
     h, w = image_gray.shape[:2]
     refined = contour.copy().astype(np.float64)
 
-    # Compute gradients
-    if use_multiscale:
+    # Use cached gradients if available, otherwise compute
+    if cached_grad_mag is not None and cached_grad_x is not None and cached_grad_y is not None:
+        grad_mag = cached_grad_mag
+        grad_x = cached_grad_x
+        grad_y = cached_grad_y
+    elif use_multiscale:
         grad_mag, grad_x, grad_y = _compute_multiscale_gradient(image_gray)
     else:
         grad_x = cv2.Scharr(image_gray, cv2.CV_64F, 1, 0)
@@ -769,6 +782,12 @@ class SmartContourFitter:
         self._subpixel_cfg = cfg.subpixel
         self._last_gray: Optional[np.ndarray] = None
 
+        # Gradient cache — reused across fit() calls for the same gray image
+        self._cached_grad_mag: Optional[np.ndarray] = None
+        self._cached_grad_x: Optional[np.ndarray] = None
+        self._cached_grad_y: Optional[np.ndarray] = None
+        self._cache_gray_id: Optional[int] = None
+
     def fit(
         self,
         binary_mask: np.ndarray,
@@ -824,18 +843,39 @@ class SmartContourFitter:
                 pts = pts[mask_pts]
 
         if self.subpixel_refine and gray_image is not None:
+            # Ensure gradient cache is populated for this gray image
+            self._ensure_gradient_cache(gray_image)
             sp = self._subpixel_cfg
             pts = _refine_contour_subpixel(
                 gray_image, pts,
                 use_multiscale=sp.use_multiscale_gradient,
                 interpolation_step=sp.interpolation_step,
                 use_parabolic=sp.use_parabolic_peak,
+                cached_grad_mag=self._cached_grad_mag,
+                cached_grad_x=self._cached_grad_x,
+                cached_grad_y=self._cached_grad_y,
             )
             self._last_gray = gray_image
         else:
             self._last_gray = None
 
         return self.fit_contour(pts)
+
+    def _ensure_gradient_cache(self, gray: np.ndarray) -> None:
+        """Compute and cache gradients if not already cached for this image."""
+        gray_id = id(gray)
+        if self._cache_gray_id == gray_id and self._cached_grad_mag is not None:
+            return
+
+        if self._subpixel_cfg.use_multiscale_gradient:
+            self._cached_grad_mag, self._cached_grad_x, self._cached_grad_y = \
+                _compute_multiscale_gradient(gray)
+        else:
+            self._cached_grad_x = cv2.Scharr(gray, cv2.CV_64F, 1, 0)
+            self._cached_grad_y = cv2.Scharr(gray, cv2.CV_64F, 0, 1)
+            self._cached_grad_mag = np.sqrt(self._cached_grad_x ** 2 + self._cached_grad_y ** 2)
+
+        self._cache_gray_id = gray_id
 
     def fit_contour(self, points: np.ndarray) -> FitResult:
         """
