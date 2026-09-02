@@ -1,0 +1,866 @@
+[
+  {
+    "frame_idx": 0,
+    "total_contours": 10,
+    "unique_fingerprints": 8,
+    "duplicate_fingerprints": 1,
+    "contours_per_threshold": {
+      "3": 1,
+      "5": 1,
+      "8": 1,
+      "12": 2,
+      "18": 4,
+      "25": 1
+    },
+    "iou_duplicate_pairs": 7,
+    "iou_total_pairs": 38,
+    "iou_duplicate_ratio": 0.1842,
+    "video": "20250218_232912A.mp4"
+  },
+  {
+    "frame_idx": 288,
+    "total_contours": 10,
+    "unique_fingerprints": 8,
+    "duplicate_fingerprints": 1,
+    "contours_per_threshold": {
+      "3": 1,
+      "5": 1,
+      "8": 1,
+      "12": 2,
+      "18": 4,
+      "25": 1
+    },
+    "iou_duplicate_pairs": 7,
+    "iou_total_pairs": 38,
+    "iou_duplicate_ratio": 0.1842,
+    "video": "20250218_232912A.mp4"
+  },
+  {
+    "frame_idx": 576,
+    "total_contours": 10,
+    "unique_fingerprints": 8,
+    "duplicate_fingerprints": 1,
+    "contours_per_threshold": {
+      "3": 1,
+      "5": 1,
+      "8": 1,
+      "12": 2,
+      "18": 4,
+      "25": 1
+    },
+    "iou_duplicate_pairs": 7,
+    "iou_total_pairs": 38,
+    "iou_duplicate_ratio": 0.1842,
+    "video": "20250218_232912A.mp4"
+  },
+  {
+    "frame_idx": 865,
+    "total_contours": 10,
+    "unique_fingerprints": 8,
+    "duplicate_fingerprints": 1,
+    "contours_per_threshold": {
+      "3": 1,
+      "5": 1,
+      "8": 1,
+      "12": 2,
+      "18": 4,
+      "25": 1
+    },
+    "iou_duplicate_pairs": 7,
+    "iou_total_pairs": 38,
+    "iou_duplicate_ratio": 0.1842,
+    "video": "20250218_232912A.mp4"
+  },
+  {
+    "frame_idx": 1153,
+    "total_contours": 10,
+    "unique_fingerprints": 8,
+    "duplicate_fingerprints": 1,
+    "contours_per_threshold": {
+      "3": 1,
+      "5": 1,
+      "8": 1,
+      "12": 2,
+      "18": 4,
+      "25": 1
+    },
+    "iou_duplicate_pairs": 7,
+    "iou_total_pairs": 38,
+    "iou_duplicate_ratio": 0.1842,
+    "video": "20250218_232912A.mp4"
+  },
+  {
+    "frame_idx": 1442,
+    "total_contours": 10,
+    "unique_fingerprints": 8,
+    "duplicate_fingerprints": 1,
+    "contours_per_threshold": {
+      "3": 1,
+      "5": 1,
+      "8": 1,
+      "12": 2,
+      "18": 4,
+      "25": 1
+    },
+    "iou_duplicate_pairs": 7,
+    "iou_total_pairs": 38,
+    "iou_duplicate_ratio": 0.1842,
+    "video": "20250218_232912A.mp4"
+  },
+  {
+    "frame_idx": 1730,
+    "total_contours": 10,
+    "unique_fingerprints": 8,
+    "duplicate_fingerprints": 1,
+    "contours_per_threshold": {
+      "3": 1,
+      "5": 1,
+      "8": 1,
+      "12": 2,
+      "18": 4,
+      "25": 1
+    },
+    "iou_duplicate_pairs": 7,
+    "iou_total_pairs": 38,
+    "iou_duplicate_ratio": 0.1842,
+    "video": "20250218_232912A.mp4"
+  },
+  {
+    "frame_idx": 2019,
+    "total_contours": 10,
+    "unique_fingerprints": 8,
+    "duplicate_fingerprints": 1,
+    "contours_per_threshold": {
+      "3": 1,
+      "5": 1,
+      "8": 1,
+      "12": 2,
+      "18": 4,
+      "25": 1
+    },
+    "iou_duplicate_pairs": 7,
+    "iou_total_pairs": 38,
+    "iou_duplicate_ratio": 0.1842,
+    "video": "20250218_232912A.mp4"
+  },
+  {
+    "frame_idx": 2307,
+    "total_contours": 11,
+    "unique_fingerprints": 9,
+    "duplicate_fingerprints": 1,
+    "contours_per_threshold": {
+      "3": 1,
+      "5": 1,
+      "8": 1,
+      "12": 3,
+      "18": 4,
+      "25": 1
+    },
+    "iou_duplicate_pairs": 6,
+    "iou_total_pairs": 46,
+    "iou_duplicate_ratio": 0.1304,
+    "video": "20250218_232912A.mp4"
+  },
+  {
+    "frame_idx": 2596,
+    "total_contours": 11,
+    "unique_fingerprints": 9,
+    "duplicate_fingerprints": 1,
+    "contours_per_threshold": {
+      "3": 1,
+      "5": 1,
+      "8": 1,
+      "12": 3,
+      "18": 4,
+      "25": 1
+    },
+    "iou_duplicate_pairs": 6,
+    "iou_total_pairs": 46,
+    "iou_duplicate_ratio": 0.1304,
+    "video": "20250218_232912A.mp4"
+  },
+  {
+    "frame_idx": 2884,
+    "total_contours": 13,
+    "unique_fingerprints": 11,
+    "duplicate_fingerprints": 1,
+    "contours_per_threshold": {
+      "3": 1,
+      "5": 1,
+      "8": 1,
+      "12": 3,
+      "18": 3,
+      "25": 4
+    },
+    "iou_duplicate_pairs": 10,
+    "iou_total_pairs": 66,
+    "iou_duplicate_ratio": 0.1515,
+    "video": "20250218_232912A.mp4"
+  },
+  {
+    "frame_idx": 3173,
+    "total_contours": 11,
+    "unique_fingerprints": 9,
+    "duplicate_fingerprints": 1,
+    "contours_per_threshold": {
+      "3": 1,
+      "5": 1,
+      "8": 1,
+      "12": 3,
+      "18": 4,
+      "25": 1
+    },
+    "iou_duplicate_pairs": 6,
+    "iou_total_pairs": 46,
+    "iou_duplicate_ratio": 0.1304,
+    "video": "20250218_232912A.mp4"
+  },
+  {
+    "frame_idx": 3461,
+    "total_contours": 18,
+    "unique_fingerprints": 16,
+    "duplicate_fingerprints": 1,
+    "contours_per_threshold": {
+      "3": 1,
+      "5": 1,
+      "8": 1,
+      "12": 5,
+      "18": 5,
+      "25": 5
+    },
+    "iou_duplicate_pairs": 15,
+    "iou_total_pairs": 123,
+    "iou_duplicate_ratio": 0.122,
+    "video": "20250218_232912A.mp4"
+  },
+  {
+    "frame_idx": 3749,
+    "total_contours": 19,
+    "unique_fingerprints": 17,
+    "duplicate_fingerprints": 1,
+    "contours_per_threshold": {
+      "3": 1,
+      "5": 1,
+      "8": 1,
+      "12": 4,
+      "18": 5,
+      "25": 7
+    },
+    "iou_duplicate_pairs": 17,
+    "iou_total_pairs": 134,
+    "iou_duplicate_ratio": 0.1269,
+    "video": "20250218_232912A.mp4"
+  },
+  {
+    "frame_idx": 4038,
+    "total_contours": 20,
+    "unique_fingerprints": 18,
+    "duplicate_fingerprints": 1,
+    "contours_per_threshold": {
+      "3": 1,
+      "5": 1,
+      "8": 1,
+      "12": 6,
+      "18": 6,
+      "25": 5
+    },
+    "iou_duplicate_pairs": 15,
+    "iou_total_pairs": 150,
+    "iou_duplicate_ratio": 0.1,
+    "video": "20250218_232912A.mp4"
+  },
+  {
+    "frame_idx": 4326,
+    "total_contours": 16,
+    "unique_fingerprints": 14,
+    "duplicate_fingerprints": 1,
+    "contours_per_threshold": {
+      "3": 1,
+      "5": 1,
+      "8": 1,
+      "12": 2,
+      "18": 5,
+      "25": 6
+    },
+    "iou_duplicate_pairs": 15,
+    "iou_total_pairs": 94,
+    "iou_duplicate_ratio": 0.1596,
+    "video": "20250218_232912A.mp4"
+  },
+  {
+    "frame_idx": 4615,
+    "total_contours": 15,
+    "unique_fingerprints": 11,
+    "duplicate_fingerprints": 2,
+    "contours_per_threshold": {
+      "3": 2,
+      "5": 2,
+      "8": 2,
+      "12": 2,
+      "18": 5,
+      "25": 2
+    },
+    "iou_duplicate_pairs": 16,
+    "iou_total_pairs": 90,
+    "iou_duplicate_ratio": 0.1778,
+    "video": "20250218_232912A.mp4"
+  },
+  {
+    "frame_idx": 4903,
+    "total_contours": 13,
+    "unique_fingerprints": 11,
+    "duplicate_fingerprints": 1,
+    "contours_per_threshold": {
+      "3": 1,
+      "5": 1,
+      "8": 1,
+      "12": 2,
+      "18": 4,
+      "25": 4
+    },
+    "iou_duplicate_pairs": 15,
+    "iou_total_pairs": 65,
+    "iou_duplicate_ratio": 0.2308,
+    "video": "20250218_232912A.mp4"
+  },
+  {
+    "frame_idx": 5192,
+    "total_contours": 12,
+    "unique_fingerprints": 10,
+    "duplicate_fingerprints": 1,
+    "contours_per_threshold": {
+      "3": 1,
+      "5": 1,
+      "8": 1,
+      "12": 1,
+      "18": 3,
+      "25": 5
+    },
+    "iou_duplicate_pairs": 12,
+    "iou_total_pairs": 53,
+    "iou_duplicate_ratio": 0.2264,
+    "video": "20250218_232912A.mp4"
+  },
+  {
+    "frame_idx": 5480,
+    "total_contours": 15,
+    "unique_fingerprints": 13,
+    "duplicate_fingerprints": 1,
+    "contours_per_threshold": {
+      "3": 1,
+      "5": 1,
+      "8": 1,
+      "12": 3,
+      "18": 2,
+      "25": 7
+    },
+    "iou_duplicate_pairs": 12,
+    "iou_total_pairs": 80,
+    "iou_duplicate_ratio": 0.15,
+    "video": "20250218_232912A.mp4"
+  },
+  {
+    "frame_idx": 5769,
+    "total_contours": 15,
+    "unique_fingerprints": 13,
+    "duplicate_fingerprints": 1,
+    "contours_per_threshold": {
+      "3": 1,
+      "5": 1,
+      "8": 1,
+      "12": 3,
+      "18": 3,
+      "25": 6
+    },
+    "iou_duplicate_pairs": 13,
+    "iou_total_pairs": 84,
+    "iou_duplicate_ratio": 0.1548,
+    "video": "20250218_232912A.mp4"
+  },
+  {
+    "frame_idx": 6057,
+    "total_contours": 15,
+    "unique_fingerprints": 13,
+    "duplicate_fingerprints": 1,
+    "contours_per_threshold": {
+      "3": 1,
+      "5": 1,
+      "8": 1,
+      "12": 3,
+      "18": 2,
+      "25": 7
+    },
+    "iou_duplicate_pairs": 12,
+    "iou_total_pairs": 80,
+    "iou_duplicate_ratio": 0.15,
+    "video": "20250218_232912A.mp4"
+  },
+  {
+    "frame_idx": 6346,
+    "total_contours": 15,
+    "unique_fingerprints": 13,
+    "duplicate_fingerprints": 1,
+    "contours_per_threshold": {
+      "3": 1,
+      "5": 1,
+      "8": 1,
+      "12": 1,
+      "18": 3,
+      "25": 8
+    },
+    "iou_duplicate_pairs": 12,
+    "iou_total_pairs": 74,
+    "iou_duplicate_ratio": 0.1622,
+    "video": "20250218_232912A.mp4"
+  },
+  {
+    "frame_idx": 6634,
+    "total_contours": 6,
+    "unique_fingerprints": 1,
+    "duplicate_fingerprints": 1,
+    "contours_per_threshold": {
+      "3": 1,
+      "5": 1,
+      "8": 1,
+      "12": 1,
+      "18": 1,
+      "25": 1
+    },
+    "iou_duplicate_pairs": 15,
+    "iou_total_pairs": 15,
+    "iou_duplicate_ratio": 1.0,
+    "video": "20250218_232912A.mp4"
+  },
+  {
+    "frame_idx": 0,
+    "total_contours": 16,
+    "unique_fingerprints": 14,
+    "duplicate_fingerprints": 1,
+    "contours_per_threshold": {
+      "3": 1,
+      "5": 1,
+      "8": 1,
+      "12": 4,
+      "18": 3,
+      "25": 6
+    },
+    "iou_duplicate_pairs": 10,
+    "iou_total_pairs": 96,
+    "iou_duplicate_ratio": 0.1042,
+    "video": "20250218_233210A.mp4"
+  },
+  {
+    "frame_idx": 202,
+    "total_contours": 10,
+    "unique_fingerprints": 8,
+    "duplicate_fingerprints": 1,
+    "contours_per_threshold": {
+      "3": 1,
+      "5": 1,
+      "8": 1,
+      "12": 2,
+      "18": 4,
+      "25": 1
+    },
+    "iou_duplicate_pairs": 7,
+    "iou_total_pairs": 38,
+    "iou_duplicate_ratio": 0.1842,
+    "video": "20250218_233210A.mp4"
+  },
+  {
+    "frame_idx": 404,
+    "total_contours": 10,
+    "unique_fingerprints": 8,
+    "duplicate_fingerprints": 1,
+    "contours_per_threshold": {
+      "3": 1,
+      "5": 1,
+      "8": 1,
+      "12": 2,
+      "18": 4,
+      "25": 1
+    },
+    "iou_duplicate_pairs": 7,
+    "iou_total_pairs": 38,
+    "iou_duplicate_ratio": 0.1842,
+    "video": "20250218_233210A.mp4"
+  },
+  {
+    "frame_idx": 607,
+    "total_contours": 11,
+    "unique_fingerprints": 9,
+    "duplicate_fingerprints": 1,
+    "contours_per_threshold": {
+      "3": 1,
+      "5": 1,
+      "8": 1,
+      "12": 3,
+      "18": 4,
+      "25": 1
+    },
+    "iou_duplicate_pairs": 6,
+    "iou_total_pairs": 46,
+    "iou_duplicate_ratio": 0.1304,
+    "video": "20250218_233210A.mp4"
+  },
+  {
+    "frame_idx": 809,
+    "total_contours": 14,
+    "unique_fingerprints": 12,
+    "duplicate_fingerprints": 1,
+    "contours_per_threshold": {
+      "3": 1,
+      "5": 1,
+      "8": 1,
+      "12": 4,
+      "18": 3,
+      "25": 4
+    },
+    "iou_duplicate_pairs": 10,
+    "iou_total_pairs": 76,
+    "iou_duplicate_ratio": 0.1316,
+    "video": "20250218_233210A.mp4"
+  },
+  {
+    "frame_idx": 1011,
+    "total_contours": 14,
+    "unique_fingerprints": 10,
+    "duplicate_fingerprints": 2,
+    "contours_per_threshold": {
+      "3": 2,
+      "5": 2,
+      "8": 2,
+      "12": 4,
+      "18": 3,
+      "25": 1
+    },
+    "iou_duplicate_pairs": 9,
+    "iou_total_pairs": 79,
+    "iou_duplicate_ratio": 0.1139,
+    "video": "20250218_233210A.mp4"
+  },
+  {
+    "frame_idx": 1214,
+    "total_contours": 18,
+    "unique_fingerprints": 16,
+    "duplicate_fingerprints": 1,
+    "contours_per_threshold": {
+      "3": 1,
+      "5": 1,
+      "8": 1,
+      "12": 4,
+      "18": 6,
+      "25": 5
+    },
+    "iou_duplicate_pairs": 15,
+    "iou_total_pairs": 122,
+    "iou_duplicate_ratio": 0.123,
+    "video": "20250218_233210A.mp4"
+  },
+  {
+    "frame_idx": 1416,
+    "total_contours": 19,
+    "unique_fingerprints": 17,
+    "duplicate_fingerprints": 1,
+    "contours_per_threshold": {
+      "3": 1,
+      "5": 1,
+      "8": 1,
+      "12": 5,
+      "18": 6,
+      "25": 5
+    },
+    "iou_duplicate_pairs": 15,
+    "iou_total_pairs": 136,
+    "iou_duplicate_ratio": 0.1103,
+    "video": "20250218_233210A.mp4"
+  },
+  {
+    "frame_idx": 1619,
+    "total_contours": 19,
+    "unique_fingerprints": 17,
+    "duplicate_fingerprints": 1,
+    "contours_per_threshold": {
+      "3": 1,
+      "5": 1,
+      "8": 1,
+      "12": 4,
+      "18": 4,
+      "25": 8
+    },
+    "iou_duplicate_pairs": 17,
+    "iou_total_pairs": 131,
+    "iou_duplicate_ratio": 0.1298,
+    "video": "20250218_233210A.mp4"
+  },
+  {
+    "frame_idx": 1821,
+    "total_contours": 18,
+    "unique_fingerprints": 16,
+    "duplicate_fingerprints": 1,
+    "contours_per_threshold": {
+      "3": 1,
+      "5": 1,
+      "8": 1,
+      "12": 4,
+      "18": 6,
+      "25": 5
+    },
+    "iou_duplicate_pairs": 15,
+    "iou_total_pairs": 122,
+    "iou_duplicate_ratio": 0.123,
+    "video": "20250218_233210A.mp4"
+  },
+  {
+    "frame_idx": 2023,
+    "total_contours": 20,
+    "unique_fingerprints": 18,
+    "duplicate_fingerprints": 1,
+    "contours_per_threshold": {
+      "3": 1,
+      "5": 1,
+      "8": 1,
+      "12": 6,
+      "18": 6,
+      "25": 5
+    },
+    "iou_duplicate_pairs": 15,
+    "iou_total_pairs": 150,
+    "iou_duplicate_ratio": 0.1,
+    "video": "20250218_233210A.mp4"
+  },
+  {
+    "frame_idx": 2226,
+    "total_contours": 17,
+    "unique_fingerprints": 15,
+    "duplicate_fingerprints": 1,
+    "contours_per_threshold": {
+      "3": 1,
+      "5": 1,
+      "8": 1,
+      "12": 5,
+      "18": 4,
+      "25": 5
+    },
+    "iou_duplicate_pairs": 15,
+    "iou_total_pairs": 110,
+    "iou_duplicate_ratio": 0.1364,
+    "video": "20250218_233210A.mp4"
+  },
+  {
+    "frame_idx": 2428,
+    "total_contours": 16,
+    "unique_fingerprints": 14,
+    "duplicate_fingerprints": 1,
+    "contours_per_threshold": {
+      "3": 1,
+      "5": 1,
+      "8": 1,
+      "12": 2,
+      "18": 4,
+      "25": 7
+    },
+    "iou_duplicate_pairs": 15,
+    "iou_total_pairs": 92,
+    "iou_duplicate_ratio": 0.163,
+    "video": "20250218_233210A.mp4"
+  },
+  {
+    "frame_idx": 2630,
+    "total_contours": 11,
+    "unique_fingerprints": 9,
+    "duplicate_fingerprints": 1,
+    "contours_per_threshold": {
+      "3": 1,
+      "5": 1,
+      "8": 1,
+      "12": 2,
+      "18": 4,
+      "25": 2
+    },
+    "iou_duplicate_pairs": 13,
+    "iou_total_pairs": 47,
+    "iou_duplicate_ratio": 0.2766,
+    "video": "20250218_233210A.mp4"
+  },
+  {
+    "frame_idx": 2833,
+    "total_contours": 16,
+    "unique_fingerprints": 14,
+    "duplicate_fingerprints": 1,
+    "contours_per_threshold": {
+      "3": 1,
+      "5": 1,
+      "8": 1,
+      "12": 3,
+      "18": 4,
+      "25": 6
+    },
+    "iou_duplicate_pairs": 16,
+    "iou_total_pairs": 96,
+    "iou_duplicate_ratio": 0.1667,
+    "video": "20250218_233210A.mp4"
+  },
+  {
+    "frame_idx": 3035,
+    "total_contours": 12,
+    "unique_fingerprints": 10,
+    "duplicate_fingerprints": 1,
+    "contours_per_threshold": {
+      "3": 1,
+      "5": 1,
+      "8": 1,
+      "12": 1,
+      "18": 2,
+      "25": 6
+    },
+    "iou_duplicate_pairs": 12,
+    "iou_total_pairs": 50,
+    "iou_duplicate_ratio": 0.24,
+    "video": "20250218_233210A.mp4"
+  },
+  {
+    "frame_idx": 3238,
+    "total_contours": 6,
+    "unique_fingerprints": 1,
+    "duplicate_fingerprints": 1,
+    "contours_per_threshold": {
+      "3": 1,
+      "5": 1,
+      "8": 1,
+      "12": 1,
+      "18": 1,
+      "25": 1
+    },
+    "iou_duplicate_pairs": 15,
+    "iou_total_pairs": 15,
+    "iou_duplicate_ratio": 1.0,
+    "video": "20250218_233210A.mp4"
+  },
+  {
+    "frame_idx": 3440,
+    "total_contours": 11,
+    "unique_fingerprints": 9,
+    "duplicate_fingerprints": 1,
+    "contours_per_threshold": {
+      "3": 1,
+      "5": 1,
+      "8": 1,
+      "12": 1,
+      "18": 3,
+      "25": 4
+    },
+    "iou_duplicate_pairs": 12,
+    "iou_total_pairs": 46,
+    "iou_duplicate_ratio": 0.2609,
+    "video": "20250218_233210A.mp4"
+  },
+  {
+    "frame_idx": 3642,
+    "total_contours": 13,
+    "unique_fingerprints": 11,
+    "duplicate_fingerprints": 1,
+    "contours_per_threshold": {
+      "3": 1,
+      "5": 1,
+      "8": 1,
+      "12": 3,
+      "18": 3,
+      "25": 4
+    },
+    "iou_duplicate_pairs": 13,
+    "iou_total_pairs": 66,
+    "iou_duplicate_ratio": 0.197,
+    "video": "20250218_233210A.mp4"
+  },
+  {
+    "frame_idx": 3845,
+    "total_contours": 13,
+    "unique_fingerprints": 11,
+    "duplicate_fingerprints": 1,
+    "contours_per_threshold": {
+      "3": 1,
+      "5": 1,
+      "8": 1,
+      "12": 2,
+      "18": 3,
+      "25": 5
+    },
+    "iou_duplicate_pairs": 12,
+    "iou_total_pairs": 64,
+    "iou_duplicate_ratio": 0.1875,
+    "video": "20250218_233210A.mp4"
+  },
+  {
+    "frame_idx": 4047,
+    "total_contours": 13,
+    "unique_fingerprints": 11,
+    "duplicate_fingerprints": 1,
+    "contours_per_threshold": {
+      "3": 1,
+      "5": 1,
+      "8": 1,
+      "12": 2,
+      "18": 3,
+      "25": 5
+    },
+    "iou_duplicate_pairs": 12,
+    "iou_total_pairs": 64,
+    "iou_duplicate_ratio": 0.1875,
+    "video": "20250218_233210A.mp4"
+  },
+  {
+    "frame_idx": 4249,
+    "total_contours": 16,
+    "unique_fingerprints": 14,
+    "duplicate_fingerprints": 1,
+    "contours_per_threshold": {
+      "3": 1,
+      "5": 1,
+      "8": 1,
+      "12": 1,
+      "18": 4,
+      "25": 8
+    },
+    "iou_duplicate_pairs": 12,
+    "iou_total_pairs": 86,
+    "iou_duplicate_ratio": 0.1395,
+    "video": "20250218_233210A.mp4"
+  },
+  {
+    "frame_idx": 4452,
+    "total_contours": 15,
+    "unique_fingerprints": 13,
+    "duplicate_fingerprints": 1,
+    "contours_per_threshold": {
+      "3": 1,
+      "5": 1,
+      "8": 1,
+      "12": 2,
+      "18": 4,
+      "25": 6
+    },
+    "iou_duplicate_pairs": 13,
+    "iou_total_pairs": 83,
+    "iou_duplicate_ratio": 0.1566,
+    "video": "20250218_233210A.mp4"
+  },
+  {
+    "frame_idx": 4654,
+    "total_contours": 6,
+    "unique_fingerprints": 1,
+    "duplicate_fingerprints": 1,
+    "contours_per_threshold": {
+      "3": 1,
+      "5": 1,
+      "8": 1,
+      "12": 1,
+      "18": 1,
+      "25": 1
+    },
+    "iou_duplicate_pairs": 15,
+    "iou_total_pairs": 15,
+    "iou_duplicate_ratio": 1.0,
+    "video": "20250218_233210A.mp4"
+  }
+]
