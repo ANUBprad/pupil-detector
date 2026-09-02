@@ -1897,7 +1897,7 @@ class UnifiedDetector:
         best_score = 0.0
         best_contour = None
 
-        for pct in [3, 5, 8, 12, 18, 25, 35]:
+        for pct in [3, 5, 8, 12, 18, 25]:
             thresh_val = np.percentile(blurred, pct)
             _, binary = cv2.threshold(blurred, thresh_val, 255, cv2.THRESH_BINARY_INV)
             kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
