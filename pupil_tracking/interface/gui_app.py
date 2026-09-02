@@ -56,6 +56,7 @@ from pupil_tracking.utils.runtime_profile import (
 )
 from pupil_tracking.interface.theme import DarkTheme
 from pupil_tracking.interface.gui import drawing
+from pupil_tracking.interface import video_pipeline
 
 # ══════════════════════════════════════════════════════════════════
 # GRAYSCALE GUI 1 of 12 — Import grayscale types
@@ -3123,7 +3124,7 @@ class PupilTrackingGUI:
             image, frame_number=self._frame_count, source=path
         )
         result = self._apply_manual_ring_policy(result)
-        self._detect_iris(result, image, "single-image")
+        video_pipeline._detect_iris(result, image, self._iris_detector, "single-image", self.logger)
         self._current_result = result
         self._results_history.append(result.to_dict())
         self._update_measurements(result)
@@ -3263,74 +3264,17 @@ class PupilTrackingGUI:
                     source=source_name,
                 )
                 result = self._apply_manual_ring_policy(result)
-            if self._tracker is not None:
-                smoothed = self._tracker.update(result)
-            else:
-                smoothed = result
-            if smoothed.has_both and self._corneal_calc is not None:
-                smoothed.corneal_center = self._corneal_calc.calculate(
-                    smoothed.pupil,
-                    smoothed.limbus,
-                    result.calibration,
-                )
-            smoothed.calibration = result.calibration
-            smoothed.ring_status = getattr(result, "ring_status", "unknown")
-            smoothed.ring_center = getattr(result, "ring_center", None)
-            smoothed.ring_radius = getattr(result, "ring_radius", None)
-            smoothed.ring_contour = getattr(result, "ring_contour", None)
-            smoothed.ring_dot_count = getattr(result, "ring_dot_count", 0)
-            smoothed.corneal_reference_source = getattr(
-                result,
-                "corneal_reference_source",
-                "limbus",
+            smoothed = video_pipeline.process_frame_post_detect(
+                result=result,
+                frame=frame,
+                tracker=self._tracker,
+                corneal_calc=self._corneal_calc,
+                iris_detector=self._iris_detector,
+                log_context="video-classic",
+                logger=self.logger,
             )
-            if (
-                smoothed.ring_status == "ring_present"
-                and smoothed.ring_center is not None
-                and getattr(smoothed, "pupil", None) is not None
-                and getattr(smoothed.pupil, "ellipse", None) is not None
-            ):
-                px = smoothed.pupil.ellipse.center_x
-                py = smoothed.pupil.ellipse.center_y
-                points = [(px, py, "pupil")]
-                weights = [max(getattr(smoothed.pupil, "confidence", 0.0), 1e-3)]
-                if getattr(smoothed, "limbus", None) is not None and getattr(smoothed.limbus, "ellipse", None) is not None:
-                    points.append(
-                        (
-                            smoothed.limbus.ellipse.center_x,
-                            smoothed.limbus.ellipse.center_y,
-                            "limbus",
-                        )
-                    )
-                    weights.append(max(getattr(smoothed.limbus, "confidence", 0.0), 1e-3))
-                points.append((smoothed.ring_center[0], smoothed.ring_center[1], "ring"))
-                weights.append(max(getattr(result, "ring_confidence", 0.0), 1e-3))
-                total_w = sum(weights)
-                rcx = sum(pt[0] * w for pt, w in zip(points, weights)) / total_w
-                rcy = sum(pt[1] * w for pt, w in zip(points, weights)) / total_w
-                smoothed.corneal_reference_source = "+".join(name for _, _, name in points)
-                smoothed.corneal_center.center_px = (rcx, rcy)
-                smoothed.corneal_center.offset_px = (px - rcx, py - rcy)
-                smoothed.corneal_center.offset_magnitude_px = math.hypot(
-                    px - rcx,
-                    py - rcy,
-                )
-                smoothed.corneal_center.offset_angle_deg = math.degrees(
-                    math.atan2(py - rcy, px - rcx)
-                )
-                smoothed.corneal_center.valid = True
-                if result.calibration.calibrated:
-                    smoothed.corneal_center.center_mm = result.calibration.point_px_to_mm((rcx, rcy))
-                    dx_mm = (px - rcx) * result.calibration.mm_per_px
-                    dy_mm = (py - rcy) * result.calibration.mm_per_px
-                    smoothed.corneal_center.offset_mm = (dx_mm, dy_mm)
-                    smoothed.corneal_center.offset_magnitude_mm = math.hypot(dx_mm, dy_mm)
             self._current_result = smoothed
             self._results_history.append(smoothed.to_dict())
-
-            # ── Iris detection for video frames ────────────────────────
-            self._detect_iris(smoothed, frame, "video-classic")
-            # ── End iris detection ─────────────────────────────────────
 
             # ══════════════════════════════════════════════════════════
             # RECORDING — Write frame to recorder at full resolution
@@ -3469,7 +3413,7 @@ class PupilTrackingGUI:
                         self.logger.error("Optimised to_dict error: %s", exc)
 
                     # ── Iris detection for threaded optimised video ───
-                    self._detect_iris(adapted, frame, "video-threaded-optimised")
+                    video_pipeline._detect_iris(adapted, frame, self._iris_detector, "video-threaded-optimised", self.logger)
                     # ── End iris detection ─────────────────────────────
 
                     # ══════════════════════════════════════════════════════════
@@ -3572,7 +3516,7 @@ class PupilTrackingGUI:
                 self.logger.error("Optimised to_dict error: %s", exc)
 
             # ── Iris detection for optimized video frames ──────────────
-            self._detect_iris(adapted, frame, "video-optimised")
+            video_pipeline._detect_iris(adapted, frame, self._iris_detector, "video-optimised", self.logger)
             # ── End iris detection ─────────────────────────────────────
 
             # ══════════════════════════════════════════════════════════
@@ -3807,7 +3751,7 @@ class PupilTrackingGUI:
                 self.logger.error("Optimised camera to_dict error: %s", exc)
 
             # ── Iris detection for optimized camera frames ─────────────
-            self._detect_iris(adapted, frame, "camera")
+            video_pipeline._detect_iris(adapted, frame, self._iris_detector, "camera", self.logger)
             # ── End iris detection ─────────────────────────────────────
 
             # ══════════════════════════════════════════════════════════
@@ -4581,32 +4525,9 @@ class PupilTrackingGUI:
     def _detect_iris(
         self, result: Any, frame: np.ndarray, log_context: str = "frame"
     ) -> None:
-        """Run iris detection on a result that has both pupil and limbus.
-
-        Assigns result.iris_detection and result.iris_status.
-        Safe to call when self._iris_detector is None.
-        """
-        if (
-            self._iris_detector is not None
-            and result.has_both
-            and getattr(result.pupil, "ellipse", None) is not None
-            and getattr(result.limbus, "ellipse", None) is not None
-        ):
-            try:
-                iris_result = self._iris_detector.detect(
-                    frame, result.pupil.ellipse, result.limbus.ellipse
-                )
-                result.iris_detection = iris_result
-                result.iris_status = iris_result.status
-            except Exception as iris_exc:
-                self.logger.debug(
-                    "Iris detection failed (%s): %s", log_context, iris_exc
-                )
-                result.iris_detection = None
-                result.iris_status = None
-        else:
-            result.iris_detection = None
-            result.iris_status = None
+        video_pipeline._detect_iris(
+            result, frame, self._iris_detector, log_context, self.logger
+        )
 
     def _reset_media(self) -> None:
         """Clear all loaded media, results, and measurements.
