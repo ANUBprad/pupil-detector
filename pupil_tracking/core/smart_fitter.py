@@ -517,7 +517,11 @@ def _refine_contour_subpixel(
         (N, 2) refined contour points (float64).
     """
     h, w = image_gray.shape[:2]
+    n_pts = len(contour)
     refined = contour.copy().astype(np.float64)
+
+    if n_pts == 0:
+        return refined
 
     # Use cached gradients if available, otherwise compute
     if cached_grad_mag is not None and cached_grad_x is not None and cached_grad_y is not None:
@@ -533,61 +537,102 @@ def _refine_contour_subpixel(
 
     n_steps = int(search_radius / interpolation_step)
     t_values = np.arange(-n_steps, n_steps + 1) * interpolation_step
+    n_samples = len(t_values)
 
-    for i in range(len(contour)):
-        px, py = contour[i]
-        ix, iy = int(round(px)), int(round(py))
+    # ── Vectorized: extract all point coordinates ──
+    px_all = contour[:, 0].astype(np.float64)
+    py_all = contour[:, 1].astype(np.float64)
+    ix_all = np.round(px_all).astype(np.intp)
+    iy_all = np.round(py_all).astype(np.intp)
 
-        if not (1 <= iy < h - 1 and 1 <= ix < w - 1):
-            continue
+    # ── Vectorized: boundary check for contour points ──
+    valid_pt = (
+        (iy_all >= 1) & (iy_all < h - 1) &
+        (ix_all >= 1) & (ix_all < w - 1)
+    )
 
-        gx = grad_x[iy, ix]
-        gy = grad_y[iy, ix]
-        g_len = math.sqrt(gx ** 2 + gy ** 2)
+    # ── Vectorized: gradient lookup for all points ──
+    gx_all = np.zeros(n_pts, dtype=np.float64)
+    gy_all = np.zeros(n_pts, dtype=np.float64)
+    gx_all[valid_pt] = grad_x[iy_all[valid_pt], ix_all[valid_pt]]
+    gy_all[valid_pt] = grad_y[iy_all[valid_pt], ix_all[valid_pt]]
 
-        if g_len < 1e-6:
-            continue
+    g_len_all = np.sqrt(gx_all ** 2 + gy_all ** 2)
+    has_gradient = valid_pt & (g_len_all >= 1e-6)
 
-        nx, ny = gx / g_len, gy / g_len
+    # ── Vectorized: compute normals for valid points ──
+    nx_all = np.zeros(n_pts, dtype=np.float64)
+    ny_all = np.zeros(n_pts, dtype=np.float64)
+    nx_all[has_gradient] = gx_all[has_gradient] / g_len_all[has_gradient]
+    ny_all[has_gradient] = gy_all[has_gradient] / g_len_all[has_gradient]
 
-        # Sample gradient magnitude along normal with bilinear interpolation
-        samples = np.zeros(len(t_values))
-        for j, t in enumerate(t_values):
-            sx = px + nx * t
-            sy = py + ny * t
+    # ── Vectorized: compute sample coordinates for all points ──
+    # Shape: (n_pts, n_samples)
+    sx_all = px_all[:, np.newaxis] + nx_all[:, np.newaxis] * t_values[np.newaxis, :]
+    sy_all = py_all[:, np.newaxis] + ny_all[:, np.newaxis] * t_values[np.newaxis, :]
 
-            if not (0 <= sx < w - 1 and 0 <= sy < h - 1):
-                continue
+    # ── Vectorized: boundary check for samples ──
+    sample_valid = (
+        (sx_all >= 0) & (sx_all < w - 1) &
+        (sy_all >= 0) & (sy_all < h - 1)
+    )
+    # Also require the point itself to have a valid gradient
+    sample_valid &= has_gradient[:, np.newaxis]
 
-            # Bilinear interpolation
-            x0, y0 = int(sx), int(sy)
-            fx, fy = sx - x0, sy - y0
-            samples[j] = (
-                grad_mag[y0, x0] * (1.0 - fx) * (1.0 - fy)
-                + grad_mag[y0, x0 + 1] * fx * (1.0 - fy)
-                + grad_mag[y0 + 1, x0] * (1.0 - fx) * fy
-                + grad_mag[y0 + 1, x0 + 1] * fx * fy
-            )
+    # ── Vectorized: bilinear interpolation for all samples ──
+    samples = np.zeros((n_pts, n_samples), dtype=np.float64)
 
-        # Find peak
-        peak_idx = int(np.argmax(samples))
+    # Integer and fractional parts
+    x0_all = np.floor(sx_all).astype(np.intp)
+    y0_all = np.floor(sy_all).astype(np.intp)
+    fx_all = sx_all - x0_all
+    fy_all = sy_all - y0_all
 
-        if use_parabolic and 1 <= peak_idx < len(samples) - 1:
-            y_m1 = samples[peak_idx - 1]
-            y_0 = samples[peak_idx]
-            y_p1 = samples[peak_idx + 1]
+    # Gather gradient magnitude values at 4 corners
+    # Clip to valid range for safety
+    x0_cl = np.clip(x0_all, 0, w - 2)
+    y0_cl = np.clip(y0_all, 0, h - 2)
+    x1_cl = x0_cl + 1
+    y1_cl = y0_cl + 1
+
+    v00 = grad_mag[y0_cl, x0_cl]
+    v10 = grad_mag[y0_cl, x1_cl]
+    v01 = grad_mag[y1_cl, x0_cl]
+    v11 = grad_mag[y1_cl, x1_cl]
+
+    bilinear = (
+        v00 * (1.0 - fx_all) * (1.0 - fy_all) +
+        v10 * fx_all * (1.0 - fy_all) +
+        v01 * (1.0 - fx_all) * fy_all +
+        v11 * fx_all * fy_all
+    )
+
+    samples[sample_valid] = bilinear[sample_valid]
+
+    # ── Vectorized: find peak for each point ──
+    peak_idx = np.argmax(samples, axis=1)
+
+    # ── Vectorized: parabolic interpolation ──
+    best_t = t_values[peak_idx].copy()
+
+    if use_parabolic:
+        # Valid interior peaks (not at boundaries)
+        interior = (peak_idx >= 1) & (peak_idx < n_samples - 1) & has_gradient
+
+        if np.any(interior):
+            idx_int = peak_idx[interior]
+            y_m1 = samples[interior, idx_int - 1]
+            y_0 = samples[interior, idx_int]
+            y_p1 = samples[interior, idx_int + 1]
             denom = 2.0 * (2.0 * y_0 - y_m1 - y_p1)
+            safe = np.abs(denom) > 1e-12
+            delta = np.zeros_like(denom)
+            delta[safe] = (y_m1[safe] - y_p1[safe]) / denom[safe]
+            best_t[interior] = t_values[idx_int] + delta * interpolation_step
 
-            if abs(denom) > 1e-12:
-                delta = (y_m1 - y_p1) / denom
-                best_t = t_values[peak_idx] + delta * interpolation_step
-            else:
-                best_t = t_values[peak_idx]
-        else:
-            best_t = t_values[peak_idx]
-
-        refined[i, 0] = px + nx * best_t
-        refined[i, 1] = py + ny * best_t
+    # ── Vectorized: compute refined coordinates ──
+    refined[has_gradient, 0] = px_all[has_gradient] + nx_all[has_gradient] * best_t[has_gradient]
+    refined[has_gradient, 1] = py_all[has_gradient] + ny_all[has_gradient] * best_t[has_gradient]
 
     return refined
 
