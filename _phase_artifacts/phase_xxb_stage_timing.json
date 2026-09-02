@@ -1,0 +1,350 @@
+[
+  {
+    "frame_idx": 865,
+    "timings_ms": {
+      "ring_detection": 11.48,
+      "preprocessing": 114.53,
+      "ml_segmentation": 3389.33,
+      "structure_extraction": 47.33,
+      "classical_pupil": 11031.86,
+      "classical_limbus": 1078.71,
+      "total": 15678.44
+    },
+    "error": null,
+    "pupil_detected": true,
+    "limbus_detected": false,
+    "confidence": 0.4307,
+    "pupil_method": "DetectionMethod.CLASSICAL",
+    "limbus_method": "DetectionMethod.ML",
+    "video": "20250218_232912A.mp4",
+    "category": "slow"
+  },
+  {
+    "frame_idx": 1442,
+    "timings_ms": {
+      "ring_detection": 495.59,
+      "preprocessing": 46.82,
+      "ml_segmentation": 2949.37,
+      "structure_extraction": 580.15,
+      "classical_pupil": 7921.67,
+      "cross_validation": 0.42,
+      "total": 12000.24
+    },
+    "error": null,
+    "pupil_detected": true,
+    "limbus_detected": false,
+    "confidence": 0.4239,
+    "pupil_method": "DetectionMethod.CLASSICAL",
+    "limbus_method": "DetectionMethod.ML",
+    "video": "20250218_232912A.mp4",
+    "category": "slow"
+  },
+  {
+    "frame_idx": 1730,
+    "timings_ms": {
+      "ring_detection": 4.28,
+      "preprocessing": 47.71,
+      "ml_segmentation": 3301.56,
+      "structure_extraction": 652.99,
+      "classical_pupil": 7916.37,
+      "cross_validation": 0.4,
+      "total": 11931.62
+    },
+    "error": null,
+    "pupil_detected": true,
+    "limbus_detected": false,
+    "confidence": 0.4306,
+    "pupil_method": "DetectionMethod.CLASSICAL",
+    "limbus_method": "DetectionMethod.ML",
+    "video": "20250218_232912A.mp4",
+    "category": "slow"
+  },
+  {
+    "frame_idx": 1153,
+    "timings_ms": {
+      "ring_detection": 306.17,
+      "preprocessing": 44.54,
+      "ml_segmentation": 5430.6,
+      "structure_extraction": 83.48,
+      "classical_pupil": 9717.77,
+      "classical_limbus": 1199.46,
+      "total": 16796.16
+    },
+    "error": null,
+    "pupil_detected": true,
+    "limbus_detected": false,
+    "confidence": 0.424,
+    "pupil_method": "DetectionMethod.CLASSICAL",
+    "limbus_method": "DetectionMethod.ML",
+    "video": "20250218_232912A.mp4",
+    "category": "slow"
+  },
+  {
+    "frame_idx": 2596,
+    "timings_ms": {
+      "ring_detection": 1809.28,
+      "preprocessing": 51.12,
+      "ml_segmentation": 4672.89,
+      "structure_extraction": 68.37,
+      "classical_pupil": 8416.44,
+      "cross_validation": 0.0,
+      "total": 15025.44
+    },
+    "error": null,
+    "pupil_detected": true,
+    "limbus_detected": true,
+    "confidence": 0.4492,
+    "pupil_method": "DetectionMethod.CLASSICAL",
+    "limbus_method": "DetectionMethod.ML",
+    "video": "20250218_232912A.mp4",
+    "category": "slow"
+  },
+  {
+    "frame_idx": 607,
+    "timings_ms": {
+      "ring_detection": 137.21,
+      "preprocessing": 120.06,
+      "ml_segmentation": 3002.31,
+      "structure_extraction": 523.02,
+      "classical_pupil": 3262.44,
+      "total": 7050.88
+    },
+    "error": null,
+    "pupil_detected": false,
+    "limbus_detected": true,
+    "confidence": 0.3539,
+    "pupil_method": "DetectionMethod.ML",
+    "limbus_method": "DetectionMethod.ML",
+    "video": "20250218_233210A.mp4",
+    "category": "slow"
+  },
+  {
+    "frame_idx": 576,
+    "timings_ms": {
+      "ring_detection": 1310.82,
+      "preprocessing": 51.74,
+      "ml_segmentation": 3777.17,
+      "structure_extraction": 995.55,
+      "cross_validation": 0.03,
+      "total": 6142.5
+    },
+    "error": null,
+    "pupil_detected": true,
+    "limbus_detected": true,
+    "confidence": 0.536,
+    "pupil_method": "DetectionMethod.ML",
+    "limbus_method": "DetectionMethod.ML",
+    "video": "20250218_232912A.mp4",
+    "category": "slow"
+  },
+  {
+    "frame_idx": 2884,
+    "timings_ms": {
+      "ring_detection": 972.31,
+      "preprocessing": 43.68,
+      "ml_segmentation": 3248.95,
+      "structure_extraction": 990.84,
+      "cross_validation": 0.05,
+      "total": 5260.57
+    },
+    "error": null,
+    "pupil_detected": true,
+    "limbus_detected": true,
+    "confidence": 0.445,
+    "pupil_method": "DetectionMethod.ML",
+    "limbus_method": "DetectionMethod.ML",
+    "video": "20250218_232912A.mp4",
+    "category": "slow"
+  },
+  {
+    "frame_idx": 0,
+    "timings_ms": {
+      "ring_detection": 5.23,
+      "preprocessing": 45.11,
+      "ml_segmentation": 2698.61,
+      "structure_extraction": 970.73,
+      "cross_validation": 0.02,
+      "total": 3725.44
+    },
+    "error": null,
+    "pupil_detected": true,
+    "limbus_detected": true,
+    "confidence": 0.4985,
+    "pupil_method": "DetectionMethod.ML",
+    "limbus_method": "DetectionMethod.ML",
+    "video": "20250218_232912A.mp4",
+    "category": "slow"
+  },
+  {
+    "frame_idx": 809,
+    "timings_ms": {
+      "ring_detection": 497.17,
+      "preprocessing": 42.07,
+      "ml_segmentation": 2533.81,
+      "structure_extraction": 1073.33,
+      "cross_validation": 0.03,
+      "total": 4151.23
+    },
+    "error": null,
+    "pupil_detected": true,
+    "limbus_detected": true,
+    "confidence": 0.41,
+    "pupil_method": "DetectionMethod.ML",
+    "limbus_method": "DetectionMethod.ML",
+    "video": "20250218_233210A.mp4",
+    "category": "slow"
+  },
+  {
+    "frame_idx": 288,
+    "timings_ms": {
+      "ring_detection": 5.48,
+      "preprocessing": 42.71,
+      "ml_segmentation": 2693.35,
+      "structure_extraction": 1016.32,
+      "cross_validation": 0.02,
+      "total": 3762.02
+    },
+    "error": null,
+    "pupil_detected": true,
+    "limbus_detected": true,
+    "confidence": 0.5545,
+    "pupil_method": "DetectionMethod.ML",
+    "limbus_method": "DetectionMethod.ML",
+    "video": "20250218_232912A.mp4",
+    "category": "slow"
+  },
+  {
+    "frame_idx": 2428,
+    "timings_ms": {
+      "ring_detection": 9.9,
+      "preprocessing": 71.21,
+      "ml_segmentation": 3229.29,
+      "structure_extraction": 1130.36,
+      "cross_validation": 0.02,
+      "total": 4444.73
+    },
+    "error": null,
+    "pupil_detected": true,
+    "limbus_detected": true,
+    "confidence": 0.4985,
+    "pupil_method": "DetectionMethod.ML",
+    "limbus_method": "DetectionMethod.ML",
+    "video": "20250218_233210A.mp4",
+    "category": "slow"
+  },
+  {
+    "frame_idx": 3845,
+    "timings_ms": {
+      "ring_detection": 7.52,
+      "preprocessing": 50.73,
+      "ml_segmentation": 2088.56,
+      "structure_extraction": 1381.45,
+      "cross_validation": 0.03,
+      "total": 3532.89
+    },
+    "error": null,
+    "pupil_detected": true,
+    "limbus_detected": true,
+    "confidence": 0.4145,
+    "pupil_method": "DetectionMethod.ML",
+    "limbus_method": "DetectionMethod.ML",
+    "video": "20250218_233210A.mp4",
+    "category": "fast"
+  },
+  {
+    "frame_idx": 5480,
+    "timings_ms": {
+      "ring_detection": 5.22,
+      "preprocessing": 48.02,
+      "ml_segmentation": 2105.7,
+      "structure_extraction": 1129.45,
+      "cross_validation": 0.03,
+      "total": 3293.6
+    },
+    "error": null,
+    "pupil_detected": true,
+    "limbus_detected": true,
+    "confidence": 0.712,
+    "pupil_method": "DetectionMethod.ML",
+    "limbus_method": "DetectionMethod.ML",
+    "video": "20250218_232912A.mp4",
+    "category": "fast"
+  },
+  {
+    "frame_idx": 6634,
+    "timings_ms": {
+      "ring_detection": 4.68,
+      "preprocessing": 42.69,
+      "ml_segmentation": 2002.1,
+      "structure_extraction": 967.95,
+      "cross_validation": 0.03,
+      "total": 3023.5
+    },
+    "error": null,
+    "pupil_detected": true,
+    "limbus_detected": true,
+    "confidence": 0.4495,
+    "pupil_method": "DetectionMethod.ML",
+    "limbus_method": "DetectionMethod.ML",
+    "video": "20250218_232912A.mp4",
+    "category": "fast"
+  },
+  {
+    "frame_idx": 4654,
+    "timings_ms": {
+      "ring_detection": 4.27,
+      "preprocessing": 48.46,
+      "ml_segmentation": 2050.97,
+      "structure_extraction": 911.97,
+      "cross_validation": 0.03,
+      "total": 3020.77
+    },
+    "error": null,
+    "pupil_detected": true,
+    "limbus_detected": true,
+    "confidence": 0.4495,
+    "pupil_method": "DetectionMethod.ML",
+    "limbus_method": "DetectionMethod.ML",
+    "video": "20250218_233210A.mp4",
+    "category": "fast"
+  },
+  {
+    "frame_idx": 2307,
+    "timings_ms": {
+      "ring_detection": 135.14,
+      "preprocessing": 117.35,
+      "ml_segmentation": 3240.84,
+      "structure_extraction": 22.61,
+      "classical_pupil": 2265.57,
+      "classical_limbus": 1535.35,
+      "total": 7323.13
+    },
+    "error": null,
+    "pupil_detected": true,
+    "limbus_detected": false,
+    "confidence": 0.3398,
+    "pupil_method": "DetectionMethod.CLASSICAL",
+    "limbus_method": "DetectionMethod.ML",
+    "video": "20250218_232912A.mp4",
+    "category": "fast"
+  },
+  {
+    "frame_idx": 2019,
+    "timings_ms": {
+      "ring_detection": 4.6,
+      "preprocessing": 48.4,
+      "ml_segmentation": 2675.46,
+      "structure_extraction": 1507.73,
+      "cross_validation": 0.0,
+      "total": 4240.42
+    },
+    "error": null,
+    "pupil_detected": true,
+    "limbus_detected": true,
+    "confidence": 0.5056,
+    "pupil_method": "DetectionMethod.ML",
+    "limbus_method": "DetectionMethod.ML",
+    "video": "20250218_232912A.mp4",
+    "category": "fast"
+  }
+]

@@ -1,0 +1,721 @@
+[
+  {
+    "frame_idx": 0,
+    "total_ms": 1540.93,
+    "ml_time_ms": 1213.08,
+    "ml_mask_info": {
+      "mask_shape": [
+        1080,
+        1920
+      ],
+      "mask_dtype": "uint8",
+      "unique_values": [
+        0,
+        1,
+        2
+      ],
+      "pupil_pixels": 7896,
+      "pupil_contours": 1,
+      "pupil_largest_area": 7709,
+      "iris_pixels": 188324,
+      "iris_contours": 1,
+      "iris_largest_area": 195283,
+      "ring_pixels": 0,
+      "ring_contours": 0,
+      "ring_largest_area": 0
+    },
+    "image_stats": {
+      "mean_brightness": 112.75,
+      "std_brightness": 69.56,
+      "contrast": 0.8618,
+      "blur_metric": 645.59,
+      "edge_density": 0.022904,
+      "center_brightness": 125.04,
+      "center_contrast": 64.82,
+      "width": 1920,
+      "height": 1080
+    },
+    "error": null,
+    "pupil_detected": true,
+    "limbus_detected": true,
+    "confidence": 0.4985,
+    "ring_detected": false,
+    "pupil_radius": 0,
+    "pupil_center": [
+      1442.62,
+      648.08
+    ],
+    "limbus_radius": 0,
+    "limbus_center": [
+      1444.65,
+      643.19
+    ],
+    "pupil_method": "DetectionMethod.ML",
+    "limbus_method": "DetectionMethod.ML",
+    "video": "20250218_232912A.mp4",
+    "category": "success"
+  },
+  {
+    "frame_idx": 288,
+    "total_ms": 1662.53,
+    "ml_time_ms": 1226.88,
+    "ml_mask_info": {
+      "mask_shape": [
+        1080,
+        1920
+      ],
+      "mask_dtype": "uint8",
+      "unique_values": [
+        0,
+        1,
+        2
+      ],
+      "pupil_pixels": 9411,
+      "pupil_contours": 1,
+      "pupil_largest_area": 9213,
+      "iris_pixels": 192246,
+      "iris_contours": 1,
+      "iris_largest_area": 200708,
+      "ring_pixels": 0,
+      "ring_contours": 0,
+      "ring_largest_area": 0
+    },
+    "image_stats": {
+      "mean_brightness": 112.52,
+      "std_brightness": 69.65,
+      "contrast": 0.8618,
+      "blur_metric": 679.27,
+      "edge_density": 0.02232,
+      "center_brightness": 123.57,
+      "center_contrast": 65.48,
+      "width": 1920,
+      "height": 1080
+    },
+    "error": null,
+    "pupil_detected": true,
+    "limbus_detected": true,
+    "confidence": 0.5545,
+    "ring_detected": false,
+    "pupil_radius": 0,
+    "pupil_center": [
+      1416.99,
+      666.54
+    ],
+    "limbus_radius": 0,
+    "limbus_center": [
+      1428.28,
+      666.96
+    ],
+    "pupil_method": "DetectionMethod.ML",
+    "limbus_method": "DetectionMethod.ML",
+    "video": "20250218_232912A.mp4",
+    "category": "success"
+  },
+  {
+    "frame_idx": 576,
+    "total_ms": 2539.1,
+    "ml_time_ms": 1600.88,
+    "ml_mask_info": {
+      "mask_shape": [
+        1080,
+        1920
+      ],
+      "mask_dtype": "uint8",
+      "unique_values": [
+        0,
+        1,
+        2
+      ],
+      "pupil_pixels": 11175,
+      "pupil_contours": 1,
+      "pupil_largest_area": 10958,
+      "iris_pixels": 210791,
+      "iris_contours": 1,
+      "iris_largest_area": 220981,
+      "ring_pixels": 0,
+      "ring_contours": 0,
+      "ring_largest_area": 0
+    },
+    "image_stats": {
+      "mean_brightness": 117.67,
+      "std_brightness": 72.99,
+      "contrast": 0.8624,
+      "blur_metric": 688.92,
+      "edge_density": 0.023212,
+      "center_brightness": 118.85,
+      "center_contrast": 67.94,
+      "width": 1920,
+      "height": 1080
+    },
+    "error": null,
+    "pupil_detected": true,
+    "limbus_detected": true,
+    "confidence": 0.536,
+    "ring_detected": false,
+    "pupil_radius": 0,
+    "pupil_center": [
+      1343.79,
+      597.63
+    ],
+    "limbus_radius": 0,
+    "limbus_center": [
+      1351.61,
+      592.73
+    ],
+    "pupil_method": "DetectionMethod.ML",
+    "limbus_method": "DetectionMethod.ML",
+    "video": "20250218_232912A.mp4",
+    "category": "success"
+  },
+  {
+    "frame_idx": 2019,
+    "total_ms": 1478.23,
+    "ml_time_ms": 1074.63,
+    "ml_mask_info": {
+      "mask_shape": [
+        1080,
+        1920
+      ],
+      "mask_dtype": "uint8",
+      "unique_values": [
+        0,
+        1,
+        2
+      ],
+      "pupil_pixels": 148,
+      "pupil_contours": 1,
+      "pupil_largest_area": 121,
+      "iris_pixels": 236803,
+      "iris_contours": 1,
+      "iris_largest_area": 235936,
+      "ring_pixels": 0,
+      "ring_contours": 0,
+      "ring_largest_area": 0
+    },
+    "image_stats": {
+      "mean_brightness": 108.8,
+      "std_brightness": 69.18,
+      "contrast": 0.8618,
+      "blur_metric": 712.97,
+      "edge_density": 0.022025,
+      "center_brightness": 107.97,
+      "center_contrast": 61.21,
+      "width": 1920,
+      "height": 1080
+    },
+    "error": null,
+    "pupil_detected": true,
+    "limbus_detected": true,
+    "confidence": 0.5056,
+    "ring_detected": false,
+    "pupil_radius": 0,
+    "pupil_center": [
+      1310.96,
+      637.19
+    ],
+    "limbus_radius": 0,
+    "limbus_center": [
+      0,
+      0
+    ],
+    "pupil_method": "DetectionMethod.ML",
+    "limbus_method": "DetectionMethod.ML",
+    "video": "20250218_232912A.mp4",
+    "category": "success"
+  },
+  {
+    "frame_idx": 2596,
+    "total_ms": 5643.85,
+    "ml_time_ms": 1416.35,
+    "ml_mask_info": {
+      "mask_shape": [
+        1080,
+        1920
+      ],
+      "mask_dtype": "uint8",
+      "unique_values": [
+        0,
+        2
+      ],
+      "pupil_pixels": 0,
+      "pupil_contours": 0,
+      "pupil_largest_area": 0,
+      "iris_pixels": 412,
+      "iris_contours": 1,
+      "iris_largest_area": 365,
+      "ring_pixels": 0,
+      "ring_contours": 0,
+      "ring_largest_area": 0
+    },
+    "image_stats": {
+      "mean_brightness": 119.38,
+      "std_brightness": 73.87,
+      "contrast": 0.8643,
+      "blur_metric": 685.75,
+      "edge_density": 0.024156,
+      "center_brightness": 123.09,
+      "center_contrast": 69.92,
+      "width": 1920,
+      "height": 1080
+    },
+    "error": null,
+    "pupil_detected": true,
+    "limbus_detected": true,
+    "confidence": 0.4492,
+    "ring_detected": false,
+    "pupil_radius": 0,
+    "pupil_center": [
+      689.67,
+      594.71
+    ],
+    "limbus_radius": 0,
+    "limbus_center": [
+      0,
+      0
+    ],
+    "pupil_method": "DetectionMethod.CLASSICAL",
+    "limbus_method": "DetectionMethod.ML",
+    "video": "20250218_232912A.mp4",
+    "category": "success"
+  },
+  {
+    "frame_idx": 2884,
+    "total_ms": 2229.38,
+    "ml_time_ms": 1423.98,
+    "ml_mask_info": {
+      "mask_shape": [
+        1080,
+        1920
+      ],
+      "mask_dtype": "uint8",
+      "unique_values": [
+        0,
+        1,
+        2
+      ],
+      "pupil_pixels": 16471,
+      "pupil_contours": 1,
+      "pupil_largest_area": 16202,
+      "iris_pixels": 249921,
+      "iris_contours": 1,
+      "iris_largest_area": 265284,
+      "ring_pixels": 0,
+      "ring_contours": 0,
+      "ring_largest_area": 0
+    },
+    "image_stats": {
+      "mean_brightness": 108.91,
+      "std_brightness": 71.77,
+      "contrast": 0.8618,
+      "blur_metric": 698.99,
+      "edge_density": 0.022777,
+      "center_brightness": 100.63,
+      "center_contrast": 68.23,
+      "width": 1920,
+      "height": 1080
+    },
+    "error": null,
+    "pupil_detected": true,
+    "limbus_detected": true,
+    "confidence": 0.445,
+    "ring_detected": false,
+    "pupil_radius": 0,
+    "pupil_center": [
+      1230.01,
+      521.57
+    ],
+    "limbus_radius": 0,
+    "limbus_center": [
+      1274.0,
+      521.54
+    ],
+    "pupil_method": "DetectionMethod.ML",
+    "limbus_method": "DetectionMethod.ML",
+    "video": "20250218_232912A.mp4",
+    "category": "success"
+  },
+  {
+    "frame_idx": 3173,
+    "total_ms": 1615.88,
+    "ml_time_ms": 1057.44,
+    "ml_mask_info": {
+      "mask_shape": [
+        1080,
+        1920
+      ],
+      "mask_dtype": "uint8",
+      "unique_values": [
+        0,
+        1,
+        2
+      ],
+      "pupil_pixels": 23043,
+      "pupil_contours": 1,
+      "pupil_largest_area": 22665,
+      "iris_pixels": 313361,
+      "iris_contours": 1,
+      "iris_largest_area": 335177,
+      "ring_pixels": 0,
+      "ring_contours": 0,
+      "ring_largest_area": 0
+    },
+    "image_stats": {
+      "mean_brightness": 102.45,
+      "std_brightness": 67.85,
+      "contrast": 0.8618,
+      "blur_metric": 695.42,
+      "edge_density": 0.023793,
+      "center_brightness": 108.56,
+      "center_contrast": 62.66,
+      "width": 1920,
+      "height": 1080
+    },
+    "error": null,
+    "pupil_detected": true,
+    "limbus_detected": true,
+    "confidence": 0.4145,
+    "ring_detected": false,
+    "pupil_radius": 0,
+    "pupil_center": [
+      1418.52,
+      618.19
+    ],
+    "limbus_radius": 0,
+    "limbus_center": [
+      1424.5,
+      593.25
+    ],
+    "pupil_method": "DetectionMethod.ML",
+    "limbus_method": "DetectionMethod.ML",
+    "video": "20250218_232912A.mp4",
+    "category": "success"
+  },
+  {
+    "frame_idx": 3461,
+    "total_ms": 1508.25,
+    "ml_time_ms": 1058.69,
+    "ml_mask_info": {
+      "mask_shape": [
+        1080,
+        1920
+      ],
+      "mask_dtype": "uint8",
+      "unique_values": [
+        0,
+        1,
+        2
+      ],
+      "pupil_pixels": 27684,
+      "pupil_contours": 1,
+      "pupil_largest_area": 27344,
+      "iris_pixels": 309684,
+      "iris_contours": 1,
+      "iris_largest_area": 336137,
+      "ring_pixels": 0,
+      "ring_contours": 0,
+      "ring_largest_area": 0
+    },
+    "image_stats": {
+      "mean_brightness": 95.26,
+      "std_brightness": 68.63,
+      "contrast": 0.8618,
+      "blur_metric": 728.26,
+      "edge_density": 0.025505,
+      "center_brightness": 98.01,
+      "center_contrast": 65.29,
+      "width": 1920,
+      "height": 1080
+    },
+    "error": null,
+    "pupil_detected": true,
+    "limbus_detected": true,
+    "confidence": 0.5055,
+    "ring_detected": false,
+    "pupil_radius": 0,
+    "pupil_center": [
+      1431.47,
+      625.9
+    ],
+    "limbus_radius": 0,
+    "limbus_center": [
+      1432.52,
+      604.47
+    ],
+    "pupil_method": "DetectionMethod.ML",
+    "limbus_method": "DetectionMethod.ML",
+    "video": "20250218_232912A.mp4",
+    "category": "success"
+  },
+  {
+    "frame_idx": 865,
+    "total_ms": 4954.6,
+    "ml_time_ms": 1285.41,
+    "ml_mask_info": {
+      "mask_shape": [
+        1080,
+        1920
+      ],
+      "mask_dtype": "uint8",
+      "unique_values": [
+        0
+      ],
+      "pupil_pixels": 0,
+      "pupil_contours": 0,
+      "pupil_largest_area": 0,
+      "iris_pixels": 0,
+      "iris_contours": 0,
+      "iris_largest_area": 0,
+      "ring_pixels": 0,
+      "ring_contours": 0,
+      "ring_largest_area": 0
+    },
+    "image_stats": {
+      "mean_brightness": 128.91,
+      "std_brightness": 74.9,
+      "contrast": 0.8734,
+      "blur_metric": 690.02,
+      "edge_density": 0.022292,
+      "center_brightness": 150.18,
+      "center_contrast": 67.57,
+      "width": 1920,
+      "height": 1080
+    },
+    "error": null,
+    "pupil_detected": true,
+    "limbus_detected": false,
+    "confidence": 0.4307,
+    "ring_detected": false,
+    "pupil_radius": 0,
+    "pupil_center": [
+      1434.32,
+      581.68
+    ],
+    "limbus_radius": 0,
+    "limbus_center": [
+      0,
+      0
+    ],
+    "pupil_method": "DetectionMethod.CLASSICAL",
+    "limbus_method": "DetectionMethod.ML",
+    "video": "20250218_232912A.mp4",
+    "category": "failure"
+  },
+  {
+    "frame_idx": 1153,
+    "total_ms": 4894.28,
+    "ml_time_ms": 1144.29,
+    "ml_mask_info": {
+      "mask_shape": [
+        1080,
+        1920
+      ],
+      "mask_dtype": "uint8",
+      "unique_values": [
+        0
+      ],
+      "pupil_pixels": 0,
+      "pupil_contours": 0,
+      "pupil_largest_area": 0,
+      "iris_pixels": 0,
+      "iris_contours": 0,
+      "iris_largest_area": 0,
+      "ring_pixels": 0,
+      "ring_contours": 0,
+      "ring_largest_area": 0
+    },
+    "image_stats": {
+      "mean_brightness": 132.92,
+      "std_brightness": 77.24,
+      "contrast": 0.8776,
+      "blur_metric": 680.13,
+      "edge_density": 0.021363,
+      "center_brightness": 151.82,
+      "center_contrast": 66.56,
+      "width": 1920,
+      "height": 1080
+    },
+    "error": null,
+    "pupil_detected": true,
+    "limbus_detected": false,
+    "confidence": 0.424,
+    "ring_detected": false,
+    "pupil_radius": 0,
+    "pupil_center": [
+      1433.43,
+      581.47
+    ],
+    "limbus_radius": 0,
+    "limbus_center": [
+      0,
+      0
+    ],
+    "pupil_method": "DetectionMethod.CLASSICAL",
+    "limbus_method": "DetectionMethod.ML",
+    "video": "20250218_232912A.mp4",
+    "category": "failure"
+  },
+  {
+    "frame_idx": 1442,
+    "total_ms": 5095.3,
+    "ml_time_ms": 1236.71,
+    "ml_mask_info": {
+      "mask_shape": [
+        1080,
+        1920
+      ],
+      "mask_dtype": "uint8",
+      "unique_values": [
+        0,
+        2
+      ],
+      "pupil_pixels": 0,
+      "pupil_contours": 0,
+      "pupil_largest_area": 0,
+      "iris_pixels": 2156,
+      "iris_contours": 1,
+      "iris_largest_area": 2028,
+      "ring_pixels": 0,
+      "ring_contours": 0,
+      "ring_largest_area": 0
+    },
+    "image_stats": {
+      "mean_brightness": 131.42,
+      "std_brightness": 76.96,
+      "contrast": 0.878,
+      "blur_metric": 689.78,
+      "edge_density": 0.021286,
+      "center_brightness": 153.4,
+      "center_contrast": 68.18,
+      "width": 1920,
+      "height": 1080
+    },
+    "error": null,
+    "pupil_detected": true,
+    "limbus_detected": false,
+    "confidence": 0.4239,
+    "ring_detected": false,
+    "pupil_radius": 0,
+    "pupil_center": [
+      1434.8,
+      581.9
+    ],
+    "limbus_radius": 0,
+    "limbus_center": [
+      0,
+      0
+    ],
+    "pupil_method": "DetectionMethod.CLASSICAL",
+    "limbus_method": "DetectionMethod.ML",
+    "video": "20250218_232912A.mp4",
+    "category": "failure"
+  },
+  {
+    "frame_idx": 1730,
+    "total_ms": 4876.99,
+    "ml_time_ms": 1304.19,
+    "ml_mask_info": {
+      "mask_shape": [
+        1080,
+        1920
+      ],
+      "mask_dtype": "uint8",
+      "unique_values": [
+        0,
+        2
+      ],
+      "pupil_pixels": 0,
+      "pupil_contours": 0,
+      "pupil_largest_area": 0,
+      "iris_pixels": 6861,
+      "iris_contours": 1,
+      "iris_largest_area": 6555,
+      "ring_pixels": 0,
+      "ring_contours": 0,
+      "ring_largest_area": 0
+    },
+    "image_stats": {
+      "mean_brightness": 116.58,
+      "std_brightness": 69.35,
+      "contrast": 0.8618,
+      "blur_metric": 681.35,
+      "edge_density": 0.022239,
+      "center_brightness": 135.45,
+      "center_contrast": 59.99,
+      "width": 1920,
+      "height": 1080
+    },
+    "error": null,
+    "pupil_detected": true,
+    "limbus_detected": false,
+    "confidence": 0.4306,
+    "ring_detected": false,
+    "pupil_radius": 0,
+    "pupil_center": [
+      1434.6,
+      582.43
+    ],
+    "limbus_radius": 0,
+    "limbus_center": [
+      0,
+      0
+    ],
+    "pupil_method": "DetectionMethod.CLASSICAL",
+    "limbus_method": "DetectionMethod.ML",
+    "video": "20250218_232912A.mp4",
+    "category": "failure"
+  },
+  {
+    "frame_idx": 2307,
+    "total_ms": 2902.42,
+    "ml_time_ms": 1356.97,
+    "ml_mask_info": {
+      "mask_shape": [
+        1080,
+        1920
+      ],
+      "mask_dtype": "uint8",
+      "unique_values": [
+        0
+      ],
+      "pupil_pixels": 0,
+      "pupil_contours": 0,
+      "pupil_largest_area": 0,
+      "iris_pixels": 0,
+      "iris_contours": 0,
+      "iris_largest_area": 0,
+      "ring_pixels": 0,
+      "ring_contours": 0,
+      "ring_largest_area": 0
+    },
+    "image_stats": {
+      "mean_brightness": 122.23,
+      "std_brightness": 73.15,
+      "contrast": 0.8636,
+      "blur_metric": 729.04,
+      "edge_density": 0.022485,
+      "center_brightness": 134.58,
+      "center_contrast": 65.1,
+      "width": 1920,
+      "height": 1080
+    },
+    "error": null,
+    "pupil_detected": true,
+    "limbus_detected": false,
+    "confidence": 0.3398,
+    "ring_detected": true,
+    "pupil_radius": 0,
+    "pupil_center": [
+      1263.65,
+      813.2
+    ],
+    "limbus_radius": 0,
+    "limbus_center": [
+      0,
+      0
+    ],
+    "pupil_method": "DetectionMethod.CLASSICAL",
+    "limbus_method": "DetectionMethod.ML",
+    "video": "20250218_232912A.mp4",
+    "category": "failure"
+  }
+]
