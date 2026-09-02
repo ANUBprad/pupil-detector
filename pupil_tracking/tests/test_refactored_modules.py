@@ -4,12 +4,11 @@ Covers the pure-logic modules that had zero direct test coverage:
 - core/corneal_center.py (calculate)
 - core/validation.py (cross_validate_and_reject)
 - core/structure_extraction.py (utility functions)
-- video/video_models.py (annotate_quality, ManualCircularROI, ManualRingAnnotation)
+- video/video_models.py (ManualCircularROI, ManualRingAnnotation)
 - interface/gui_helpers.py (hex_to_bgr, ascii_for_capture, scale_ellipse)
 
-Note: Tests for blend_from_available, blend_corneal_center_from_points, and
-ring-radius kwargs on SmartContourFitter.fit() were removed — these APIs were
-planned but never implemented; the logic lives elsewhere in the pipeline.
+Note: Tests for annotate_quality and FrameResult were removed — these APIs
+were deleted in Cleanup-2 (dead code removal).
 """
 
 from __future__ import annotations
@@ -424,50 +423,6 @@ class TestApplyFitToResult:
 # ═══════════════════════════════════════════════════════════════════════
 
 
-class TestAnnotateQuality:
-    def test_both_detected_averages(self):
-        from pupil_tracking.video.video_models import annotate_quality
-
-        det = {
-            "pupil_detected": True,
-            "limbus_detected": True,
-            "pupil_confidence": 0.8,
-            "limbus_confidence": 0.6,
-        }
-        result = annotate_quality(det)
-        assert result["overall_confidence"] == pytest.approx(0.7)
-        assert result["overall_quality"] is not None
-
-    def test_pupil_only(self):
-        from pupil_tracking.video.video_models import annotate_quality
-
-        det = {
-            "pupil_detected": True,
-            "limbus_detected": False,
-            "pupil_confidence": 0.8,
-        }
-        result = annotate_quality(det)
-        assert result["overall_confidence"] == pytest.approx(0.8)
-
-    def test_limbus_only(self):
-        from pupil_tracking.video.video_models import annotate_quality
-
-        det = {
-            "pupil_detected": False,
-            "limbus_detected": True,
-            "limbus_confidence": 0.6,
-        }
-        result = annotate_quality(det)
-        assert result["overall_confidence"] == pytest.approx(0.6)
-
-    def test_none_detected(self):
-        from pupil_tracking.video.video_models import annotate_quality
-
-        det = {"pupil_detected": False, "limbus_detected": False}
-        result = annotate_quality(det)
-        assert result["overall_confidence"] == 0.0
-
-
 class TestManualCircularROI:
     def test_matches_frame_matching(self):
         from pupil_tracking.video.video_models import ManualCircularROI
@@ -505,22 +460,6 @@ class TestManualRingAnnotation:
         ann = ManualRingAnnotation(100, 100, 200)
         frame = np.zeros((480, 640, 3), dtype=np.uint8)
         assert ann.matches_frame(frame) is True
-
-
-class TestFrameResult:
-    def test_attribute_access(self):
-        from pupil_tracking.video.video_models import FrameResult
-
-        fr = FrameResult(pupil_center=(100, 100), confidence=0.9)
-        assert fr.pupil_center == (100, 100)
-        assert fr.confidence == 0.9
-
-    def test_attribute_error(self):
-        from pupil_tracking.video.video_models import FrameResult
-
-        fr = FrameResult()
-        with pytest.raises(AttributeError):
-            _ = fr.nonexistent
 
 
 # ═══════════════════════════════════════════════════════════════════════

@@ -7,7 +7,9 @@ Tests the --corrected-output functionality:
 4. Identical input/output paths are rejected
 5. Existing corrected output is handled safely
 6. Parent directory behavior
-7. CLI argument parsing
+
+Note: TestCLIParsing was removed — the --corrected-output CLI argument
+was deleted in Cleanup-2 (dead code removal).
 """
 
 from __future__ import annotations
@@ -267,23 +269,6 @@ class TestParentDirectoryCreation:
         store.save()
 
         assert cp.exists()
-
-
-class TestCLIParsing:
-    """Test that --corrected-output is recognized."""
-
-    def test_corrected_output_in_help(self):
-        """Verify --corrected-output appears in CLI help."""
-        import subprocess
-
-        result = subprocess.run(
-            [sys.executable, str(Path(__file__).resolve().parent.parent.parent / "scripts" / "annotate_live_video.py"), "annotate", "--help"],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-        assert "--corrected-output" in result.stdout
-        assert "corrected" in result.stdout.lower()
 
 
 class TestAnnotationStoreBehavior:
