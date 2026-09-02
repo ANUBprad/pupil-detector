@@ -57,6 +57,12 @@ from pupil_tracking.utils.runtime_profile import (
 from pupil_tracking.interface.theme import DarkTheme
 from pupil_tracking.interface.gui import drawing
 from pupil_tracking.interface import video_pipeline
+from pupil_tracking.interface.canvas_utils import (
+    canvas_to_image_point as _canvas_to_image_point,
+    active_manual_roi as _active_manual_roi_fn,
+    active_manual_ring as _active_manual_ring_fn,
+    manual_roi_crop as _manual_roi_crop_fn,
+)
 
 # ══════════════════════════════════════════════════════════════════
 # GRAYSCALE GUI 1 of 12 — Import grayscale types
@@ -2786,38 +2792,23 @@ class PupilTrackingGUI:
     ) -> Optional[Tuple[float, float]]:
         if self._current_image is None:
             return None
-        ox, oy = self._display_origin
-        dw, dh = self._display_size
-        if dw <= 0 or dh <= 0:
-            return None
-        if not (ox <= canvas_x <= ox + dw and oy <= canvas_y <= oy + dh):
-            return None
-        x = (canvas_x - ox) / max(self._display_scale, 1e-6)
-        y = (canvas_y - oy) / max(self._display_scale, 1e-6)
-        h, w = self._current_image.shape[:2]
-        return (float(np.clip(x, 0, w - 1)), float(np.clip(y, 0, h - 1)))
+        return _canvas_to_image_point(
+            canvas_x, canvas_y,
+            self._display_origin, self._display_size,
+            self._display_scale, self._current_image.shape,
+        )
 
     def _active_manual_roi(self) -> Optional[Dict[str, float]]:
-        if self._manual_roi is None or self._current_image is None:
-            return None
-        h, w = self._current_image.shape[:2]
-        if (
-            int(round(self._manual_roi.get("frame_width", w))) != w
-            or int(round(self._manual_roi.get("frame_height", h))) != h
-        ):
-            return None
-        return self._manual_roi
+        return _active_manual_roi_fn(
+            self._manual_roi,
+            self._current_image.shape if self._current_image is not None else None,
+        )
 
     def _active_manual_ring(self) -> Optional[Dict[str, float]]:
-        if self._manual_ring is None or self._current_image is None:
-            return None
-        h, w = self._current_image.shape[:2]
-        if (
-            int(round(self._manual_ring.get("frame_width", w))) != w
-            or int(round(self._manual_ring.get("frame_height", h))) != h
-        ):
-            return None
-        return self._manual_ring
+        return _active_manual_ring_fn(
+            self._manual_ring,
+            self._current_image.shape if self._current_image is not None else None,
+        )
 
     def _apply_manual_ring_policy(self, result: Any) -> Any:
         """Only allow ring data when a manual ring has been confirmed."""
@@ -3023,18 +3014,7 @@ class PupilTrackingGUI:
         roi = self._active_manual_roi()
         if roi is None:
             return None
-        h, w = frame.shape[:2]
-        cx = float(np.clip(roi["center_x"], 0, w - 1))
-        cy = float(np.clip(roi["center_y"], 0, h - 1))
-        radius = max(1.0, float(roi["radius"]))
-        x0 = max(0, int(np.floor(cx - radius)))
-        y0 = max(0, int(np.floor(cy - radius)))
-        x1 = min(w, int(np.ceil(cx + radius)))
-        y1 = min(h, int(np.ceil(cy + radius)))
-        crop = frame[y0:y1, x0:x1]
-        if crop.size == 0:
-            return None
-        return crop, float(x0), float(y0)
+        return _manual_roi_crop_fn(frame, roi)
 
     # ================================================================
     # Image Operations
