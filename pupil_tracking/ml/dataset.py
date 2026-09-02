@@ -843,100 +843,6 @@ def get_annotation_stats(
 
 
 # ══════════════════════════════════════════════════════════════════════
-# Class weight computation
-# ══════════════════════════════════════════════════════════════════════
-
-
-def compute_class_weights(
-    annotations: Dict[str, Dict[str, Any]],
-    image_ids: List[str],
-    image_dir: str,
-    num_classes: int = 3,
-    use_boundary_points: bool = False,
-) -> torch.Tensor:
-    """Compute inverse-frequency class weights from annotations.
-
-    Generates masks for a sample of images and counts pixels per class
-    to derive balanced loss weights.  Handles the case where the ring
-    class (3) appears only in docked images.
-
-    Parameters
-    ----------
-    annotations : dict
-        Annotation dictionary.
-    image_ids : list of str
-        Image IDs to sample from.
-    image_dir : str
-        Image directory (for reading image dimensions).
-    num_classes : int
-        Number of segmentation classes (3 or 4).
-    use_boundary_points : bool
-        Whether to use boundary points for mask generation.
-
-    Returns
-    -------
-    torch.Tensor
-        Class weights of shape ``(num_classes,)``.
-    """
-    logger = get_logger()
-    class_counts = np.zeros(num_classes, dtype=np.float64)
-    image_dir_path = Path(image_dir)
-
-    sample_ids = image_ids[:50]  # Sample up to 50 images for speed
-
-    for img_id in sample_ids:
-        ann = annotations.get(img_id, {})
-
-        # Determine image shape
-        img_w = ann.get("image_width", 0)
-        img_h = ann.get("image_height", 0)
-
-        if img_w == 0 or img_h == 0:
-            # Try reading the image
-            for ext in (".jpeg", ".jpg", ".png", ".bmp"):
-                img_path = image_dir_path / f"{img_id}{ext}"
-                if img_path.exists():
-                    img = cv2.imread(str(img_path))
-                    if img is not None:
-                        img_h, img_w = img.shape[:2]
-                        break
-
-        if img_w == 0 or img_h == 0:
-            continue
-
-        mask = generate_mask_from_annotation(
-            (img_h, img_w), ann, num_classes,
-            use_boundary_points=use_boundary_points,
-        )
-
-        for c in range(num_classes):
-            class_counts[c] += np.count_nonzero(mask == c)
-
-    # Compute inverse-frequency weights
-    total = class_counts.sum()
-    if total == 0:
-        logger.warning("No pixels counted — returning uniform weights")
-        return torch.ones(num_classes, dtype=torch.float32)
-
-    weights = total / (num_classes * class_counts + 1e-6)
-    weights = weights / weights.sum() * num_classes
-    weights = np.clip(weights, 0.1, 10.0)
-
-    class_names = {
-        0: "background", 1: "pupil", 2: "iris", 3: "suction_ring",
-    }
-    for c in range(num_classes):
-        name = class_names.get(c, f"class_{c}")
-        pct = class_counts[c] / total * 100 if total > 0 else 0
-        logger.info(
-            "  Class %d (%s): %d pixels (%.1f%%), weight=%.3f",
-            c, name, int(class_counts[c]), pct, weights[c],
-        )
-
-    return torch.tensor(weights, dtype=torch.float32)
-
-
-# ══════════════════════════════════════════════════════════════════════
 # Augmentation pipelines — compatible with albumentations >= 2.0
 # ══════════════════════════════════════════════════════════════════════
 
@@ -1247,10 +1153,6 @@ def _get_val_augmentation(input_size: int = 512) -> Any:
         ]
     )
 
-
-def _get_inference_transform(input_size: int = 512) -> Any:
-    """Inference-time preprocessing (same as val)."""
-    return _get_val_augmentation(input_size)
 
 
 # ═══════════════════════════════════════════════════════════════════════

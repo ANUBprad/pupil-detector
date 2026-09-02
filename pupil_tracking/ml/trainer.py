@@ -73,28 +73,6 @@ def compute_iou(
     return ious
 
 
-def compute_center_error(
-    pred_mask: np.ndarray,
-    gt_center: Tuple[float, float],
-    class_id: int,
-    mask_scale: float = 1.0,
-) -> float:
-    """Pixel error between predicted mask centroid and GT center.
-
-    Returns
-    -------
-    float  Euclidean distance in pixels (at the original image scale).
-    """
-    ys, xs = np.where(pred_mask == class_id)
-    if len(xs) == 0:
-        return float("inf")
-    pred_cx = float(np.mean(xs)) * mask_scale
-    pred_cy = float(np.mean(ys)) * mask_scale
-    dx = pred_cx - gt_center[0]
-    dy = pred_cy - gt_center[1]
-    return float(np.sqrt(dx * dx + dy * dy))
-
-
 # ══════════════════════════════════════════════════════════════════════
 # Safe num_workers for Windows
 # ══════════════════════════════════════════════════════════════════════

@@ -833,11 +833,3 @@ class FastInference:
             return (float(cx), float(cy), float(r), float(r), float(r), 0.0)
 
         return None
-
-    @staticmethod
-    def _clean_mask(mask: np.ndarray) -> np.ndarray:
-        """Standalone morphological clean-up (5×5 close+open)."""
-        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
-        out = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
-        out = cv2.morphologyEx(out, cv2.MORPH_OPEN, kernel)
-        return out

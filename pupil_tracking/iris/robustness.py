@@ -50,11 +50,6 @@ N_RADIAL_BANDS = 4               # 4 equal radial_norm bands over (0, 1]
 # Perturbation generators (deterministic; each takes a seed)
 # --------------------------------------------------------------------------- #
 
-def _as_gray_or_bgr(image: np.ndarray) -> np.ndarray:
-    """Return the image unchanged as float; the appliers work on BGR images."""
-    return image
-
-
 def perturb_brightness(image_bgr: np.ndarray, delta: float, seed: int = 0) -> np.ndarray:
     """Add ``delta`` (typically +/-25) to every pixel, clipped to [0, 255]."""
     return np.clip(image_bgr.astype(np.float32) + delta, 0, 255).astype(np.uint8)

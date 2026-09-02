@@ -311,35 +311,4 @@ class ReflectionRemover:
 
         return mask
 
-    def detect_only(self, image: np.ndarray) -> np.ndarray:
-        """Return the reflection mask without inpainting."""
-        return self._detect_reflections(image)
 
-    def get_reflection_stats(self, image: np.ndarray) -> dict:
-        """Return statistics about reflections in the image."""
-        mask = self._detect_reflections(image)
-        total = image.shape[0] * image.shape[1]
-        n_reflection = int(np.count_nonzero(mask))
-
-        n_labels, _, stats, centroids = cv2.connectedComponentsWithStats(
-            mask, connectivity=8
-        )
-
-        blobs = []
-        for i in range(1, n_labels):
-            blobs.append(
-                {
-                    "area": int(stats[i, cv2.CC_STAT_AREA]),
-                    "center": (
-                        float(centroids[i, 0]),
-                        float(centroids[i, 1]),
-                    ),
-                }
-            )
-
-        return {
-            "total_reflection_pixels": n_reflection,
-            "reflection_fraction": n_reflection / max(total, 1),
-            "num_blobs": len(blobs),
-            "blobs": blobs,
-        }

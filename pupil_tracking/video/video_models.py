@@ -13,33 +13,6 @@ from typing import Any, Dict, Optional
 
 import numpy as np
 
-from pupil_tracking.utils.types import assign_quality_grade
-
-
-def annotate_quality(det: Dict[str, Any]) -> Dict[str, Any]:
-    """Attach unified confidence + quality labels to flat detection dicts."""
-    pupil_detected = bool(det.get("pupil_detected", False))
-    limbus_detected = bool(det.get("limbus_detected", False))
-
-    if pupil_detected and limbus_detected:
-        overall_conf = float(
-            (
-                float(det.get("pupil_confidence", 0.0))
-                + float(det.get("limbus_confidence", 0.0))
-            )
-            / 2.0
-        )
-    elif pupil_detected:
-        overall_conf = float(det.get("pupil_confidence", 0.0))
-    elif limbus_detected:
-        overall_conf = float(det.get("limbus_confidence", 0.0))
-    else:
-        overall_conf = 0.0
-
-    det["overall_confidence"] = overall_conf
-    det["overall_quality"] = assign_quality_grade(overall_conf).value
-    return det
-
 
 @dataclass
 class ManualCircularROI:
@@ -74,30 +47,3 @@ class ManualRingAnnotation:
             return True
         h, w = frame.shape[:2]
         return w == self.frame_width and h == self.frame_height
-
-
-class TrackingQuality:
-    """Enum-like class for tracking quality levels."""
-
-    EXCELLENT = "excellent"
-    GOOD = "good"
-    OK = "ok"
-    POOR = "poor"
-    LOST = "lost"
-
-
-class FrameResult(dict):
-    """Result from processing a single frame.
-
-    Extends dict with convenient attribute access.
-    Contains detection results, metadata, and quality metrics.
-    """
-
-    def __getattr__(self, key: str) -> Any:
-        try:
-            return self[key]
-        except KeyError:
-            raise AttributeError(f"FrameResult has no attribute '{key}'")
-
-    def __setattr__(self, key: str, val: Any) -> None:
-        self[key] = val

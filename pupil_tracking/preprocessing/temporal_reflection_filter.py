@@ -80,11 +80,6 @@ class TemporalReflectionFilter:
         # Statistics
         self._frame_count = 0
 
-    def reset(self) -> None:
-        """Clear history and reset filter state."""
-        self._history.clear()
-        self._frame_count = 0
-
     def process(
         self,
         image: np.ndarray,
@@ -202,89 +197,4 @@ class TemporalReflectionFilter:
 
         return stable
 
-    def get_stats(self) -> dict:
-        """Return current filter statistics."""
-        return {
-            "history_size": len(self._history),
-            "total_frames_processed": self._frame_count,
-            "blink_threshold": self.blink_threshold,
-            "min_stable_frames": self.min_stable_frames,
-        }
 
-
-class PupilRegionProtector:
-    """Protect the pupil region from reflection removal artifacts.
-
-    Sometimes reflection removal can introduce artifacts in the pupil
-    region. This class provides additional protection by:
-    1. Detecting potential pupil region before processing
-    2. Limiting inpainting in the pupil region
-    3. Preferring dark (pupil-like) values for inpainting near center
-
-    Parameters
-    ----------
-    pupil_margin_frac : float
-        Fraction of image size to add as margin around detected
-        bright spots when determining pupil region.
-    """
-
-    def __init__(
-        self,
-        pupil_margin_frac: float = 0.15,
-    ) -> None:
-        self.pupil_margin_frac = pupil_margin_frac
-        self.logger = get_logger()
-
-    def protect(
-        self,
-        image: np.ndarray,
-        reflection_mask: np.ndarray,
-    ) -> np.ndarray:
-        """Return modified reflection mask with pupil protection.
-
-        Parameters
-        ----------
-        image : np.ndarray
-            Input BGR image.
-        reflection_mask : np.ndarray
-            Binary mask of detected reflections.
-
-        Returns
-        -------
-        np.ndarray
-            Modified mask with potential pupil region protected.
-        """
-        h, w = image.shape[:2]
-
-        # Find bright spots that could be the pupil
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-
-        # Look for dark region in center (potential pupil)
-        # The pupil should be darker than surroundings
-        center_x, center_y = w // 2, h // 2
-
-        # Check if there's a dark region near center
-        center_region = gray[
-            max(0, center_y - h // 4) : min(h, center_y + h // 4),
-            max(0, center_x - w // 4) : min(w, center_x + w // 4),
-        ]
-
-        if center_region.size > 0:
-            mean_brightness = np.mean(center_region)
-
-            # If center is dark (potential pupil), reduce reflection mask there
-            if mean_brightness < 100:
-                # Create a soft mask for the center region
-                y_start = max(0, center_y - h // 4)
-                y_end = min(h, center_y + h // 4)
-                x_start = max(0, center_x - w // 4)
-                x_end = min(w, center_x + w // 4)
-
-                # Reduce reflection mask in dark center region
-                protected = reflection_mask.copy()
-                protected[y_start:y_end, x_start:x_end] = (
-                    protected[y_start:y_end, x_start:x_end] // 2
-                )
-                return protected
-
-        return reflection_mask

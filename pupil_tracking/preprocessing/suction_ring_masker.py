@@ -211,11 +211,6 @@ class SuctionRingMasker:
         ring_result.mask = mask
         return cleaned, mask, ring_result
 
-    def detect_only(self, image: np.ndarray) -> np.ndarray:
-        """Return the marker mask without inpainting."""
-        mask, _ = self._detect_markers(image)
-        return mask
-
     # ────────────────────────────────────────────────────────────
     # Internal detection
     # ────────────────────────────────────────────────────────────
@@ -490,7 +485,3 @@ class SuctionRingMasker:
     # Utilities
     # ────────────────────────────────────────────────────────────
 
-    def count_markers(self, image: np.ndarray) -> int:
-        """Count the number of detected ring markers."""
-        _, result = self._detect_markers(image)
-        return result.dot_count

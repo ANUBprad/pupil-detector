@@ -236,32 +236,6 @@ class RedLightFilter:
 
         return mask
 
-    def get_red_light_regions(self, image: np.ndarray) -> list:
-        """Return list of (x, y, radius) for detected red light regions.
-
-        Can be used for post-processing to ignore detections near red lights.
-
-        Returns
-        -------
-        List of (center_x, center_y, radius) tuples
-        """
-        mask = self._detect_red_lights(image)
-
-        n_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(
-            mask, connectivity=8
-        )
-
-        regions = []
-        for i in range(1, n_labels):
-            area = stats[i, cv2.CC_STAT_AREA]
-            if area < self.min_area:
-                continue
-            cx, cy = centroids[i]
-            radius = int(np.sqrt(area / np.pi)) * 2  # Approximate radius
-            regions.append((int(cx), int(cy), radius))
-
-        return regions
-
     def _apply_temporal(
         self,
         current_mask: np.ndarray,
@@ -302,43 +276,11 @@ class RedLightFilter:
 
         return current_mask
 
-    def detect_only(self, image: np.ndarray) -> np.ndarray:
-        """Return the red light mask without filtering."""
-        return self._detect_red_lights(image)
-
     def reset_temporal(self) -> None:
         """Reset temporal tracking state."""
         self._temporal_mask = None
         self._temporal_count = 0
 
-    def get_red_light_stats(self, image: np.ndarray) -> dict:
-        """Return statistics about detected red lights."""
-        mask = self._detect_red_lights(image)
-        total = image.shape[0] * image.shape[1]
-        n_red = int(np.count_nonzero(mask))
-
-        n_labels, _, stats, centroids = cv2.connectedComponentsWithStats(
-            mask, connectivity=8
-        )
-
-        blobs = []
-        for i in range(1, n_labels):
-            blobs.append(
-                {
-                    "area": int(stats[i, cv2.CC_STAT_AREA]),
-                    "center": (
-                        float(centroids[i, 0]),
-                        float(centroids[i, 1]),
-                    ),
-                }
-            )
-
-        return {
-            "total_red_pixels": n_red,
-            "red_fraction": n_red / max(total, 1),
-            "num_blobs": len(blobs),
-            "blobs": blobs,
-        }
 
 
 class AdaptiveRedLightFilter(RedLightFilter):

@@ -303,29 +303,3 @@ class ImageNormalizer:
         )
         return cv2.LUT(image, lut)
 
-    def get_image_stats(
-        self, image: np.ndarray
-    ) -> dict:
-        """Return diagnostic statistics about image quality.
-
-        Useful for debugging illumination issues and verifying
-        that normalisation is working correctly.
-        """
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        b, g, r = cv2.split(image)
-
-        return {
-            "brightness_mean": float(gray.mean()),
-            "brightness_std": float(gray.std()),
-            "brightness_min": int(gray.min()),
-            "brightness_max": int(gray.max()),
-            "channel_means": {
-                "blue": float(b.mean()),
-                "green": float(g.mean()),
-                "red": float(r.mean()),
-            },
-            "contrast": float(
-                gray.std() / max(gray.mean(), 1)
-            ),
-            "dynamic_range": int(gray.max()) - int(gray.min()),
-        }

@@ -34,11 +34,6 @@ from pupil_tracking.iris.types import (
 from pupil_tracking.utils.types import EllipseParams
 
 
-def _texture_energy(gray: np.ndarray) -> np.ndarray:
-    """Absolute Laplacian as a cheap local texture/edge-energy map."""
-    return np.abs(cv2.Laplacian(gray, cv2.CV_32F))
-
-
 def _safe_patch(gray: np.ndarray, x: float, y: float, radius: int) -> np.ndarray:
     """Extract a square grayscale patch centred at (x, y), clamped to bounds.
 
