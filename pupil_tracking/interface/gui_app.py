@@ -47,6 +47,7 @@ from pupil_tracking.iris.detect import IrisFeatureDetector
 from pupil_tracking.utils.types import (
     DetectionQuality,
     CalibrationInfo,
+    EllipseParams,
 )
 from pupil_tracking.utils.config import get_config
 from pupil_tracking.utils.logger import get_logger
@@ -4159,15 +4160,13 @@ class PupilTrackingGUI:
                 return None
             full_a, full_b = float(max(axes)), float(min(axes))
             semi_a, semi_b = full_a / 2.0, full_b / 2.0
-            mean_radius = (semi_a + semi_b) / 2.0  # match EllipseParams convention
             ecc = (
                 math.sqrt(max(0.0, 1.0 - (semi_b / semi_a) ** 2)) if semi_a > 0 else 0.0
             )
             circ = (semi_b / semi_a) if semi_a > 0 else 1.0
-            return SimpleNamespace(
+            return EllipseParams(
                 center_x=center[0],
                 center_y=center[1],
-                radius=mean_radius,
                 semi_major=semi_a,
                 semi_minor=semi_b,
                 angle_deg=angle,
@@ -4178,7 +4177,6 @@ class PupilTrackingGUI:
                 num_contour_points=0,
                 uncertainty_center_x=1.0,
                 uncertainty_center_y=1.0,
-                fit_type=fit_type,
             )
 
         p_ell = _make_ellipse(

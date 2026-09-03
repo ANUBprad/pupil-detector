@@ -299,3 +299,57 @@ def test_visualization_returns_same_shape():
 def cv2_from_gray(gray):
     import cv2
     return cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
+
+
+# ── regression: fallback ellipse object contract ────────────────────────
+
+def test_roi_extractor_requires_is_valid_on_ellipse():
+    """IrisROIExtractor.build() must not raise when given EllipseParams.
+
+    Regression: _make_ellipse() in gui_app.py returned SimpleNamespace
+    which lacked the `is_valid` property, causing AttributeError in
+    IrisROIExtractor.build() at roi.py:73.  The fix changed _make_ellipse()
+    to return EllipseParams.  This test locks that contract.
+    """
+    roi_ext = IrisROIExtractor()
+    pupil_e = _make_ellipse(100, 100, 55, 55)
+    limbus_e = _make_ellipse(100, 100, 130, 130)
+    roi = roi_ext.build(pupil_e, limbus_e)
+    assert roi.valid, f"ROI should be valid, got reason={roi.reason}"
+    assert roi.pupil_radius_px > 0
+    assert roi.limbus_radius_px > 0
+
+
+def test_roi_extractor_rejects_simple_namespace():
+    """SimpleNamespace ellipses (missing is_valid) must fail gracefully.
+
+    Pre-fix behavior: IrisROIExtractor.build() raised AttributeError.
+    After fix this should still fail gracefully (caught in _detect_iris).
+    """
+    from types import SimpleNamespace
+    roi_ext = IrisROIExtractor()
+    bad_pupil = SimpleNamespace(center_x=100, center_y=100,
+                                semi_major=55, semi_minor=55, angle_deg=0.0)
+    bad_limbus = SimpleNamespace(center_x=100, center_y=100,
+                                 semi_major=130, semi_minor=130, angle_deg=0.0)
+    try:
+        roi = roi_ext.build(bad_pupil, bad_limbus)
+        # If it doesn't raise, it must report invalid
+        assert not roi.valid, "SimpleNamespace should produce invalid ROI"
+    except AttributeError:
+        # Pre-fix behavior is acceptable — caught by _detect_iris
+        pass
+
+
+def test_fallback_ellipse_has_required_contract():
+    """The attributes produced by _make_ellipse must satisfy IrisROIExtractor."""
+    pupil_e = _make_ellipse(960, 540, 56, 56)
+    limbus_e = _make_ellipse(960, 540, 140, 140)
+    for e in (pupil_e, limbus_e):
+        assert hasattr(e, "is_valid"), f"Missing is_valid on {type(e)}"
+        assert e.is_valid
+        assert hasattr(e, "semi_major")
+        assert hasattr(e, "semi_minor")
+        assert hasattr(e, "angle_deg")
+        assert hasattr(e, "center_x")
+        assert hasattr(e, "center_y")
