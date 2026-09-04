@@ -159,10 +159,9 @@ def point_in_roi_annulus(x: float, y: float, roi: IrisROI) -> bool:
 def sample_annulus_mask(shape, roi: IrisROI) -> np.ndarray:
     """Return a boolean (H, W) mask marking iris-annulus pixels.
 
-    The annulus is defined by mean-circle approximations of the pupil and
-    limbus ellipses. This is a lightweight helper for visualisation and for
-    coarse occlusion accounting; feature extraction uses the per-angle radial
-    mapping instead.
+    The annulus is defined by the actual pupil and limbus ellipse boundaries
+    at each angle, not by a circular mean-radius approximation.  This
+    correctly handles non-concentric and non-circular geometry.
     """
     h, w = shape[:2]
     mask = np.zeros((h, w), dtype=bool)
@@ -170,10 +169,28 @@ def sample_annulus_mask(shape, roi: IrisROI) -> np.ndarray:
         return mask
 
     yy, xx = np.mgrid[0:h, 0:w]
-    dx = xx - roi.center_x
-    dy = yy - roi.center_y
+    dx = (xx - roi.center_x).astype(np.float64)
+    dy = (yy - roi.center_y).astype(np.float64)
     dist = np.sqrt(dx * dx + dy * dy)
-    inner = roi.pupil_radius_px * (1.0 + roi.inner_inset_frac)
-    outer = roi.limbus_radius_px * (1.0 - roi.outer_inset_frac)
+    angles_rad = np.arctan2(dy, dx)
+
+    def _ellipse_r_at_angles(semi_a, semi_b, ell_angle_deg, angles):
+        phi = np.radians(ell_angle_deg)
+        diff = angles - phi
+        c = np.cos(diff)
+        s = np.sin(diff)
+        denom = (s / semi_a) ** 2 + (c / semi_b) ** 2
+        denom = np.maximum(denom, 1e-12)
+        return 1.0 / np.sqrt(denom)
+
+    inner = _ellipse_r_at_angles(
+        roi.pupil_semi_major, roi.pupil_semi_minor,
+        roi.pupil_angle_deg, angles_rad,
+    ) * (1.0 + roi.inner_inset_frac)
+    outer = _ellipse_r_at_angles(
+        roi.limbus_semi_major, roi.limbus_semi_minor,
+        roi.limbus_angle_deg, angles_rad,
+    ) * (1.0 - roi.outer_inset_frac)
+
     mask = (dist >= inner) & (dist <= outer)
     return mask
