@@ -23,7 +23,7 @@ import numpy as np
 
 from pupil_tracking.iris.config import IrisConfig
 from pupil_tracking.iris.extraction import IrisFeatureExtractor
-from pupil_tracking.iris.masking import IrisMasking, mask_stats
+from pupil_tracking.iris.masking import IrisMasking, mask_stats, roi_iris_stats
 from pupil_tracking.iris.roi import IrisROIExtractor
 from pupil_tracking.iris.types import IrisDetectionResult, IrisFeatureSet, IrisStatus
 from pupil_tracking.preprocessing.reflection_removal import ReflectionRemover
@@ -50,6 +50,12 @@ class IrisFeatureDetector:
             min_contrast=self.config.min_contrast,
             max_features=self.config.max_features,
             min_angular_sep_deg=self.config.min_angular_sep_deg,
+            min_patch_valid_fraction=self.config.min_patch_valid_fraction,
+            use_roi_percentiles=self.config.use_roi_percentiles,
+            roi_p05=self.config.roi_p05,
+            roi_p95=self.config.roi_p95,
+            intensity_low_frac=self.config.intensity_low_frac,
+            intensity_high_frac=self.config.intensity_high_frac,
         )
         self.roi_extractor = IrisROIExtractor(
             inner_inset_frac=self.config.inner_inset_frac,
@@ -58,6 +64,10 @@ class IrisFeatureDetector:
         self.masking = IrisMasking(
             reflection_remover=reflection_remover,
             only_within_roi=self.config.only_within_roi,
+            eyelid_method=self.config.eyelid_method,
+            eyelid_edge_threshold=self.config.eyelid_edge_threshold,
+            eyelid_dilate_px=self.config.eyelid_dilate_px,
+            saturation_threshold=self.config.saturation_threshold,
         )
 
     def detect(
@@ -97,12 +107,15 @@ class IrisFeatureDetector:
 
         usable = self.masking.build(image, roi, external_occlusion=external_occlusion)
 
+        iris_stats = roi_iris_stats(image, usable, roi)
+
         feature_set = self.extractor.extract(
             image,
             roi,
             usable,
             pupil=pupil,
             limbus=limbus,
+            roi_stats=iris_stats,
         )
         feature_set.usable_fraction = mask_stats(usable, roi).get(
             "usable_fraction", 0.0
@@ -122,6 +135,7 @@ class IrisFeatureDetector:
             feature_set=feature_set,
             mask_stats=mask_stats(usable, roi),
         )
+        result.mask_stats.update(iris_stats)
         return self._finish(result, start)
 
     def detect_from_ellipses(self, image, pupil, limbus, **kwargs):

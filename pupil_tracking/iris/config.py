@@ -29,6 +29,30 @@ class IrisConfig:
     max_features: int = 120          # hard cap on accepted features
     min_angular_sep_deg: float = 5.0
 
+    # Reflection / specular masking
+    reflection_brightness_threshold: int = 230
+    reflection_saturation_threshold: int = 40
+    reflection_min_area: int = 20
+
+    # Eyelid / eyelash masking (heuristic, applied only inside the annulus)
+    eyelid_method: str = "gradient"   # "gradient" | "none"
+    eyelid_edge_threshold: float = 60.0   # gradient magnitude -> eyelid candidate
+    eyelid_dilate_px: int = 6
+
+    # Saturation masking
+    saturation_threshold: int = 250    # per-pixel brightness that is hopelessly white
+    saturated_frac_limit: float = 0.5  # max accepted patch saturated fraction
+
+    # ROI-based intensity validation (percentile scaling across acquisition types)
+    use_roi_percentiles: bool = True   # derive thresholds from isolated iris ROI
+    roi_p05: float = 0.05
+    roi_p95: float = 0.95
+    intensity_low_frac: float = 0.30   # patch mean must exceed this fraction of ROI p05->p95 span
+    intensity_high_frac: float = 0.80
+
+    # Patch-acceptance validation
+    min_patch_valid_fraction: float = 0.7   # patch must be >=70% inside valid mask
+
     # Masking
     only_within_roi: bool = True
 
@@ -43,5 +67,19 @@ class IrisConfig:
             "min_contrast": self.min_contrast,
             "max_features": self.max_features,
             "min_angular_sep_deg": self.min_angular_sep_deg,
+            "reflection_brightness_threshold": self.reflection_brightness_threshold,
+            "reflection_saturation_threshold": self.reflection_saturation_threshold,
+            "reflection_min_area": self.reflection_min_area,
+            "eyelid_method": self.eyelid_method,
+            "eyelid_edge_threshold": self.eyelid_edge_threshold,
+            "eyelid_dilate_px": self.eyelid_dilate_px,
+            "saturation_threshold": self.saturation_threshold,
+            "saturated_frac_limit": self.saturated_frac_limit,
+            "use_roi_percentiles": self.use_roi_percentiles,
+            "roi_p05": self.roi_p05,
+            "roi_p95": self.roi_p95,
+            "intensity_low_frac": self.intensity_low_frac,
+            "intensity_high_frac": self.intensity_high_frac,
+            "min_patch_valid_fraction": self.min_patch_valid_fraction,
             "only_within_roi": self.only_within_roi,
         }

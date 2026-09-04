@@ -19,6 +19,7 @@ input yields the same output. No matching/registration logic is included.
 from __future__ import annotations
 
 import math
+from collections import Counter
 from typing import List, Optional, Sequence, Tuple
 
 import cv2
@@ -82,6 +83,20 @@ class IrisFeatureExtractor:
         Hard cap on accepted features (quality sorted).
     min_angular_sep_deg : float
         Enforce roughly this angular separation between accepted features.
+    min_patch_valid_fraction : float
+        Fraction of the feature's local patch that must lie inside the valid
+        iris mask for the feature to be accepted (default 0.7).
+    use_roi_percentiles : bool
+        When True, intensity acceptance uses the ROI-derived percentile span
+        instead of a fixed global band; this adapts to ELITA RGB vs Pentacam
+        illumination.
+    roi_p05 / roi_p95 : float
+        Percentile ranks used to derive the adaptive intensity span when
+        ``use_roi_percentiles``.
+    intensity_low_frac / intensity_high_frac : float
+        Acceptable patch-mean intensity range expressed as a fraction of the
+        ROI p05..p95 span (adaptive), so it is never a hard-coded universal
+        intensity band.
     """
 
     def __init__(
@@ -92,6 +107,12 @@ class IrisFeatureExtractor:
         min_contrast: float = 4.0,
         max_features: int = 120,
         min_angular_sep_deg: float = 5.0,
+        min_patch_valid_fraction: float = 0.7,
+        use_roi_percentiles: bool = True,
+        roi_p05: float = 0.05,
+        roi_p95: float = 0.95,
+        intensity_low_frac: float = 0.30,
+        intensity_high_frac: float = 0.80,
     ) -> None:
         self.num_angles = int(num_angles)
         self.num_radii = int(num_radii)
@@ -99,6 +120,12 @@ class IrisFeatureExtractor:
         self.min_contrast = float(min_contrast)
         self.max_features = int(max_features)
         self.min_angular_sep_deg = float(min_angular_sep_deg)
+        self.min_patch_valid_fraction = float(min_patch_valid_fraction)
+        self.use_roi_percentiles = bool(use_roi_percentiles)
+        self.roi_p05 = float(roi_p05)
+        self.roi_p95 = float(roi_p95)
+        self.intensity_low_frac = float(intensity_low_frac)
+        self.intensity_high_frac = float(intensity_high_frac)
         self._normalizer = IrisNormalizer()
 
     def _local_measures(
@@ -225,6 +252,41 @@ class IrisFeatureExtractor:
             return 1.0
         return float(np.count_nonzero(patch) / total)
 
+    def _patch_valid_fraction(
+        self,
+        usable_mask: np.ndarray,
+        x: float,
+        y: float,
+    ) -> float:
+        """Fraction of the feature's local patch that lies in the valid mask.
+
+        Validates the *support region*, not just the centre pixel, so a feature
+        whose patch straddles an occlusion / reflection / sclera / pupil edge
+        is rejected.
+        """
+        return self._local_visibility(usable_mask, x, y)
+
+    def _intensity_range_ok(
+        self,
+        patch_mean: float,
+        roi_stats: dict,
+    ) -> bool:
+        """Check a patch's mean intensity against the ROI-derived range.
+
+        When ``use_roi_percentiles`` the bounds are a fraction of the ROI
+        p05..p95 span, so they adapt to the actual frame illumination.  The
+        patch mean must fall within ``[p05 + low_frac*span, p05 + high_frac*span]``.
+        Without percentiles, a permissive fixed band is used.
+        """
+        if not self.use_roi_percentiles:
+            return 0.0 <= patch_mean <= 255.0
+        p05 = roi_stats.get("intensity_p05", 0.0)
+        p95 = roi_stats.get("intensity_p95", 0.0)
+        span = max(p95 - p05, 1e-6)
+        lo = p05 + self.intensity_low_frac * span
+        hi = p05 + self.intensity_high_frac * span
+        return lo <= patch_mean <= hi
+
     def extract(
         self,
         image: np.ndarray,
@@ -233,11 +295,15 @@ class IrisFeatureExtractor:
         *,
         pupil: Optional[EllipseParams] = None,
         limbus: Optional[EllipseParams] = None,
+        roi_stats: Optional[dict] = None,
     ) -> IrisFeatureSet:
         """Extract iris features from an image given the ROI and usable mask.
 
         ``image`` may be BGR (H, W, 3) or grayscale (H, W); luminance is used.
         ``usable_mask`` is the boolean mask produced by ``IrisMasking``.
+        ``roi_stats`` optionally carries the isolated-ROI intensity/texture
+        statistics used for adaptive acceptance; when absent a fixed band is
+        assumed.
         """
         h, w = roi_valid_shape(image, roi)
         if not roi.valid or h is None:
@@ -249,6 +315,7 @@ class IrisFeatureExtractor:
             gray = image.astype(np.float32, copy=False)
 
         candidates: List[IrisFeature] = []
+        rejection_reasons: Counter[str] = Counter()
 
         for ai in range(self.num_angles):
             angle_deg = (360.0 * ai) / self.num_angles
@@ -267,19 +334,28 @@ class IrisFeatureExtractor:
                 if xi < 0 or yi < 0 or xi >= w or yi >= h:
                     continue
                 if not usable_mask[yi, xi]:
+                    rejection_reasons["outside_valid_mask"] += 1
                     continue
 
-                _, local_contrast, response, _ = self._local_measures(
+                mean_c, local_contrast, response, _ = self._local_measures(
                     gray, x, y
                 )
                 if response < self.min_contrast:
+                    rejection_reasons["low_texture"] += 1
                     continue
 
                 patch = _safe_patch(gray, x, y, self.radius_px)
                 feat_type = self._classify(patch)
 
+                if not self._intensity_range_ok(mean_c, roi_stats or {}):
+                    rejection_reasons["low_contrast"] += 1
+                    continue
+                pvf = self._patch_valid_fraction(usable_mask, x, y)
+                if pvf < self.min_patch_valid_fraction:
+                    rejection_reasons["patch_outside_iris"] += 1
+                    continue
+
                 descriptor = self._descriptor(gray, x, y)
-                # Composite confidence: texture response + boundary clearance.
                 clearance = min(radial_norm, 1.0 - radial_norm) * 2.0
                 confidence = self._confidence(
                     response, local_contrast, clearance
@@ -304,7 +380,7 @@ class IrisFeatureExtractor:
                     )
                 )
 
-        return self._filter(roi, candidates)
+        return self._filter(roi, candidates, rejection_reasons)
 
     def _confidence(self, response, local_contrast, clearance):
         """Blend texture, contrast and boundary-clearance into [0, 1]."""
@@ -315,14 +391,17 @@ class IrisFeatureExtractor:
         self,
         roi: IrisROI,
         candidates: Sequence[IrisFeature],
+        rejection_reasons: Optional[Counter[str]] = None,
     ) -> IrisFeatureSet:
         """Angular suppression + quality sort + cap, and set ROI/coverage."""
+        rejection_reasons = rejection_reasons or Counter()
         n_cand = len(candidates)
         if n_cand == 0:
             return IrisFeatureSet(
                 roi=roi,
                 num_candidates=0,
                 num_accepted=0,
+                rejection_reasons=dict(rejection_reasons),
             )
 
         # Sort by confidence descending, then greedily accept while enforcing
@@ -331,13 +410,16 @@ class IrisFeatureExtractor:
         accepted: List[IrisFeature] = []
         for feat in ordered:
             if len(accepted) >= self.max_features:
-                break
+                rejection_reasons["max_features_cap"] += 1
+                continue
             if all(
                 self._angular_gap(feat.angle_deg, a.angle_deg)
                 >= self.min_angular_sep_deg
                 for a in accepted
             ):
                 accepted.append(feat)
+            else:
+                rejection_reasons["angular_suppression"] += 1
 
         accepted.sort(key=lambda f: f.angle_deg)
         for i, f in enumerate(accepted):
@@ -348,6 +430,7 @@ class IrisFeatureExtractor:
             features=list(accepted),
             num_candidates=n_cand,
             num_accepted=len(accepted),
+            rejection_reasons=dict(rejection_reasons),
         )
 
     @staticmethod

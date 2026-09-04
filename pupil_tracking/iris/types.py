@@ -176,6 +176,7 @@ class IrisFeatureSet:
     num_accepted: int = 0
     region_coverage: float = 0.0        # fraction of usable iris area covered
     usable_fraction: float = 0.0        # fraction of annulus not occluded/reflective
+    rejection_reasons: Dict[str, int] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -185,6 +186,7 @@ class IrisFeatureSet:
             "num_accepted": self.num_accepted,
             "region_coverage": float(self.region_coverage),
             "usable_fraction": float(self.usable_fraction),
+            "rejection_reasons": dict(self.rejection_reasons),
         }
 
 
