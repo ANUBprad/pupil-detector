@@ -353,3 +353,41 @@ def test_fallback_ellipse_has_required_contract():
         assert hasattr(e, "angle_deg")
         assert hasattr(e, "center_x")
         assert hasattr(e, "center_y")
+
+
+# ── adaptive texture gate (Phase 11) ─────────────────────────────────
+
+def test_adaptive_gate_rejects_flat_iris():
+    """A completely flat (zero-texture) synthetic iris must yield 0 features.
+
+    This guards against the adaptive gate admitting noise as false features
+    when the iris ROI itself has no measurable texture.
+    """
+    # Build a flat iris manually: uniform gray inside the iris annulus, no noise.
+    size = 320
+    gray = np.full((size, size), 25, np.uint8)
+    center = size // 2
+    cv2_circle_reuse(gray, (center, center), 130, 80)   # iris disc
+    cv2_circle_reuse(gray, (center, center), 55, 10)     # pupil
+    pupil, limbus = _default_geometry()
+    res = detect_iris_features(gray, pupil, limbus).feature_set
+    assert res.num_accepted == 0, (
+        f"flat iris should yield 0 features, got {res.num_accepted}"
+    )
+
+
+def test_adaptive_gate_configurable_floor():
+    """Higher texture_floor must not reduce features on a textured iris.
+
+    The default floor (2.5) is low enough for moderate-texture irides.
+    Raising it strictly should reduce (not increase) accepted features.
+    """
+    img = _synthetic_iris_image(rng_seed=0, texture=12.0, crypts=True)
+    pupil, limbus = _default_geometry()
+
+    low_floor = IrisConfig(texture_floor=0.0)
+    high_floor = IrisConfig(texture_floor=8.0)
+    r_low = detect_iris_features(img, pupil, limbus, config=low_floor).feature_set
+    r_high = detect_iris_features(img, pupil, limbus, config=high_floor).feature_set
+    # Features should be identical or fewer with the higher floor, never more.
+    assert r_high.num_accepted <= r_low.num_accepted

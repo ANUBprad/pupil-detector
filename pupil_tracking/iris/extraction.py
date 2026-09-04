@@ -105,6 +105,8 @@ class IrisFeatureExtractor:
         num_radii: int = 8,
         radius_px: int = 5,
         min_contrast: float = 4.0,
+        texture_floor: float = 2.5,
+        texture_rel_frac: float = 0.5,
         max_features: int = 120,
         min_angular_sep_deg: float = 5.0,
         min_patch_valid_fraction: float = 0.7,
@@ -118,6 +120,8 @@ class IrisFeatureExtractor:
         self.num_radii = int(num_radii)
         self.radius_px = int(radius_px)
         self.min_contrast = float(min_contrast)
+        self.texture_floor = float(texture_floor)
+        self.texture_rel_frac = float(texture_rel_frac)
         self.max_features = int(max_features)
         self.min_angular_sep_deg = float(min_angular_sep_deg)
         self.min_patch_valid_fraction = float(min_patch_valid_fraction)
@@ -340,7 +344,14 @@ class IrisFeatureExtractor:
                 mean_c, local_contrast, response, _ = self._local_measures(
                     gray, x, y
                 )
-                if response < self.min_contrast:
+                # Adaptive texture gate: relative to ROI texture level with an
+                # absolute floor.  The floor protects against flat/noise iris
+                # (texture ~0) and degenerate synthetic test fixtures; the
+                # relative term normalises for camera gain / illumination
+                # (Daugman 1993: raw amplitude is gain-sensitive).
+                roi_tex = (roi_stats or {}).get("texture_response_mean", 0.0)
+                adaptive_min = max(self.texture_floor, self.texture_rel_frac * roi_tex)
+                if response < adaptive_min:
                     rejection_reasons["low_texture"] += 1
                     continue
 

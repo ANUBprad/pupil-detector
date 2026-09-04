@@ -26,6 +26,8 @@ class IrisConfig:
 
     # Feature quality filtering
     min_contrast: float = 4.0        # minimum mean texture energy (to be tuned)
+    texture_floor: float = 2.5       # absolute minimum response gate (Daugman: protect against flat/zero-texture iris)
+    texture_rel_frac: float = 0.5    # fraction of ROI texture_response_mean used for adaptive gate
     max_features: int = 120          # hard cap on accepted features
     min_angular_sep_deg: float = 5.0
 
@@ -65,6 +67,8 @@ class IrisConfig:
             "num_radii": self.num_radii,
             "radius_px": self.radius_px,
             "min_contrast": self.min_contrast,
+            "texture_floor": self.texture_floor,
+            "texture_rel_frac": self.texture_rel_frac,
             "max_features": self.max_features,
             "min_angular_sep_deg": self.min_angular_sep_deg,
             "reflection_brightness_threshold": self.reflection_brightness_threshold,

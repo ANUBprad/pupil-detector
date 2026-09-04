@@ -48,6 +48,8 @@ class IrisFeatureDetector:
             num_radii=self.config.num_radii,
             radius_px=self.config.radius_px,
             min_contrast=self.config.min_contrast,
+            texture_floor=self.config.texture_floor,
+            texture_rel_frac=self.config.texture_rel_frac,
             max_features=self.config.max_features,
             min_angular_sep_deg=self.config.min_angular_sep_deg,
             min_patch_valid_fraction=self.config.min_patch_valid_fraction,
