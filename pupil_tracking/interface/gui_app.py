@@ -72,19 +72,37 @@ from pupil_tracking.interface.canvas_utils import (
 # the detector exposes grayscale info via detector.last_grayscale_info.
 # ══════════════════════════════════════════════════════════════════
 
-try:
-    from pupil_tracking.ml.fast_inference import FastInference
-    from pupil_tracking.video.optimized_processor import (
-        OptimizedVideoProcessor,
-        AsyncCapture,
-    )
+# The optimised pipeline pulls in torch (>=18 s import). It is only
+# needed for the optimised video/camera path, so it is imported lazily
+# on first use instead of at module top level (which delayed the GUI
+# window by ~18 s). See ``_ensure_fast_pipeline``.
+_FAST_PIPELINE_AVAILABLE = False
+FastInference = None
+OptimizedVideoProcessor = None
+AsyncCapture = None
+_FP_LOOKED_UP = False
 
-    _FAST_PIPELINE_AVAILABLE = True
-except ImportError:
-    _FAST_PIPELINE_AVAILABLE = False
-    FastInference = None
-    OptimizedVideoProcessor = None
-    AsyncCapture = None
+
+def _ensure_fast_pipeline() -> None:
+    """Lazily import the optimised pipeline; safe to call repeatedly."""
+    global _FAST_PIPELINE_AVAILABLE, FastInference, OptimizedVideoProcessor
+    global AsyncCapture, _FP_LOOKED_UP
+    if _FP_LOOKED_UP:
+        return
+    _FP_LOOKED_UP = True
+    try:
+        from pupil_tracking.ml.fast_inference import FastInference
+        from pupil_tracking.video.optimized_processor import (
+            OptimizedVideoProcessor,
+            AsyncCapture,
+        )
+
+        _FAST_PIPELINE_AVAILABLE = True
+    except ImportError:
+        _FAST_PIPELINE_AVAILABLE = False
+        FastInference = None
+        OptimizedVideoProcessor = None
+        AsyncCapture = None
 
 # ══════════════════════════════════════════════════════════════════
 # RECORDING — Import FrameRecorder
@@ -275,7 +293,7 @@ class PupilTrackingGUI:
     # ================================================================
 
     def _init_detector(self) -> None:
-        self._status_var.set("Loading model…")
+        self._status_var.set("Loading model\u2026")
         self.root.update()
 
         try:
@@ -296,30 +314,49 @@ class PupilTrackingGUI:
             self.logger.error("Failed to init iris detector: %s", exc)
             self._iris_detector = None
 
+        # UnifiedDetector loads the ONNX model (~2-3 s).  Build it on a
+        # background thread so the Tk event loop stays responsive while
+        # the user sees "Loading model\u2026".  No detection runs until
+        # self._detector is assigned, which happens atomically via
+        # root.after from the worker thread (Tkinter-safe).
+        gs_mode = self._grayscale_mode_var.get()
+        t = threading.Thread(
+            target=self._build_detector_worker,
+            args=(gs_mode,),
+            daemon=True,
+            name="DetectorInit",
+        )
+        t.start()
+
+    def _build_detector_worker(self, grayscale_mode: str) -> None:
+        """Background worker: construct UnifiedDetector (blocks on ONNX load)."""
         try:
-            # ══════════════════════════════════════════════════════
-            # GRAYSCALE GUI 4 of 12 — Pass grayscale_mode to detector
-            # ══════════════════════════════════════════════════════
-            self._detector = UnifiedDetector(
+            detector = UnifiedDetector(
                 config=self.cfg,
-                grayscale_mode=self._grayscale_mode_var.get(),
+                grayscale_mode=grayscale_mode,
             )
-            # ══════════════════════════════════════════════════════
-
-            if self._detector.ml_engine.available:
-                tag = "GPU" if _FAST_PIPELINE_AVAILABLE else "GPU (classic)"
-                self._model_status_var.set(f"Model: Ready ({tag})")
-            else:
-                self._model_status_var.set("Model: Classical Only (ML unavailable)")
-
-            self._status_var.set("Ready — Load an image or start camera")
+            self.root.after(0, self._on_detector_ready, detector)
         except Exception as exc:
             self.logger.error("Failed to init detector: %s", exc)
-            self._detector = None
-            self._model_status_var.set(f"Model: ERROR — {exc}")
-            self._status_var.set(
-                "Model loading failed — classical detection unavailable"
-            )
+            self.root.after(0, self._on_detector_error, str(exc))
+
+    def _on_detector_ready(self, detector: "UnifiedDetector") -> None:
+        """Main-thread callback: detector constructed successfully."""
+        self._detector = detector
+        if detector.ml_engine.available:
+            tag = "GPU" if _FAST_PIPELINE_AVAILABLE else "GPU (classic)"
+            self._model_status_var.set(f"Model: Ready ({tag})")
+        else:
+            self._model_status_var.set("Model: Classical Only (ML unavailable)")
+        self._status_var.set("Ready \u2014 Load an image or start camera")
+
+    def _on_detector_error(self, exc_str: str) -> None:
+        """Main-thread callback: detector construction failed."""
+        self._detector = None
+        self._model_status_var.set(f"Model: ERROR \u2014 {exc_str}")
+        self._status_var.set(
+            "Model loading failed \u2014 classical detection unavailable"
+        )
 
     # ================================================================
     # Grayscale Mode Control (NEW)
@@ -2148,6 +2185,7 @@ class PupilTrackingGUI:
         return None
 
     def _get_fast_engine(self) -> Optional[Any]:
+        _ensure_fast_pipeline()
         if not _FAST_PIPELINE_AVAILABLE:
             return None
         if self._fast_engine is not None:
@@ -3163,6 +3201,8 @@ class PupilTrackingGUI:
         self._eta_label_var.set("")
         self._pause_btn.config(state=tk.NORMAL, text="⏸ Pause")
         src_name = "Camera" if isinstance(source, int) else Path(str(source)).name
+        if self._use_optimized_var.get():
+            _ensure_fast_pipeline()
         use_opt = self._use_optimized_var.get() and _FAST_PIPELINE_AVAILABLE
         engine = self._get_fast_engine() if use_opt else None
         if engine is not None:
