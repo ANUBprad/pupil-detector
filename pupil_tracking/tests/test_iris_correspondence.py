@@ -33,6 +33,7 @@ from pupil_tracking.iris.correspondence import (
     evaluate_pair,
     wrap_deg,
 )
+from pupil_tracking.iris.config import IrisConfig
 from pupil_tracking.iris.detect import detect_iris_features
 from pupil_tracking.iris.paired import PairConfig, make_synthetic_pair
 from pupil_tracking.iris.types import IrisFeature, IrisFeatureSet, IrisROI
@@ -70,7 +71,10 @@ def eye_geo():
 @pytest.fixture(scope="module")
 def feats_a(eye_src, eye_geo):
     pe, le = eye_geo
-    res = detect_iris_features(eye_src, pe, le)
+    res = detect_iris_features(
+        eye_src, pe, le,
+        config=_iris_test_config(),
+    )
     assert res.feature_set.roi.valid
     return res.feature_set
 
@@ -83,8 +87,23 @@ def _feats_b(eye_src, eye_geo, config, *, ellipse_scale=1.0):
                          semi_minor=55.0 * ellipse_scale, angle_deg=0.0)
     le_b = EllipseParams(center_x=c, center_y=c, semi_major=130.0 * ellipse_scale,
                          semi_minor=130.0 * ellipse_scale, angle_deg=0.0)
-    res = detect_iris_features(pair.image_b, pe_b, le_b)
+    res = detect_iris_features(
+        pair.image_b, pe_b, le_b, config=_iris_test_config()
+    )
     return pair, res.feature_set
+
+
+def _iris_test_config():
+    """Test config for the synthetic radial-pattern fixtures.
+
+    The synthetic iris has symmetric radial texture and no lids/reflections,
+    so production masking strictness (eyelid gradient detection, adaptive
+    intensity band) over-rejects it and starves the matching layer. These
+    correspondence tests validate rotation/scale recovery, not masking tuning,
+    so they use the pre-hardening permissive defaults those tests were written
+    against.
+    """
+    return IrisConfig(eyelid_method="none", use_roi_percentiles=False)
 
 
 def _build_pair(eye_src, eye_geo, feats_a, config, ellipse_scale=1.0):
@@ -218,7 +237,9 @@ def test_rotation_plus_scale_combined(eye_src, eye_geo, feats_a):
 def test_content_mismatch_rejected_as_low_ncc(eye_src, eye_geo, feats_a):
     # IMAGE B is a different texture entirely: refinement NCC gates it.
     pe, le = eye_geo
-    other = detect_iris_features(_synthetic_iris_bgr(rng_seed=99), pe, le)
+    other = detect_iris_features(
+        _synthetic_iris_bgr(rng_seed=99), pe, le, config=_iris_test_config()
+    )
     out = evaluate_pair(eye_src, _synthetic_iris_bgr(rng_seed=99),
                         feats_a, other.feature_set, gt_rotation_deg=0.0,
                         gt_scale=1.0)
