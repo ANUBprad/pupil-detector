@@ -31,8 +31,19 @@ from pupil_tracking.iris.correspondence import (
     MatchingBaseline,
     estimate_correspondence,
 )
+from pupil_tracking.iris.detect import IrisFeatureDetector
 from pupil_tracking.iris.types import IrisStatus
 from pupil_tracking.utils.types import EllipseParams
+from pupil_tracking.interface.gui.drawing import (
+    draw_cross_section,
+    draw_filled_structure,
+    draw_iris_feature_overlay,
+)
+from pupil_tracking.interface.gui_helpers import draw_structure
+from pupil_tracking.interface.video_pipeline import (
+    _detect_iris,
+    process_frame_post_detect,
+)
 
 
 # ── fixtures ───────────────────────────────────────────────────────────
@@ -338,3 +349,138 @@ def test_self_matching_control_yields_valid_rotation(_src):
     )
     assert res.valid is True
     assert abs(min(res.estimated_rotation_deg, 360.0 - res.estimated_rotation_deg)) < 0.5
+
+
+# ── 6. detection ⇄ display frame-ownership contract ──────────────────────
+#
+# The GUI may draw blue/green crosses, circles, fills, iris-feature dots and
+# labels on screen.  Those overlays must NEVER be detector input.  The correct
+# mechanism is frame ownership / pipeline ordering (source FRAME → detection →
+# rendering on a separate display copy), not colour filtering.  These tests pin
+# that contract against the real production functions the GUI calls:
+# ``video_pipeline._detect_iris`` / ``process_frame_post_detect`` and the
+# ``gui.drawing`` / ``gui_helpers`` draw functions.
+
+from types import SimpleNamespace
+
+
+class _RecordingDetector:
+    """Wraps the real iris detector and records the exact array object it was
+    handed — the identity probe for the ownership contract."""
+
+    def __init__(self, inner):
+        self.inner = inner
+        self.received = None
+
+    def detect(self, frame, pupil, limbus):
+        self.received = frame
+        return self.inner.detect(frame, pupil, limbus)
+
+
+def _ns_result(pupil, limbus):
+    return SimpleNamespace(
+        has_both=True,
+        pupil=SimpleNamespace(detected=True, ellipse=pupil),
+        limbus=SimpleNamespace(detected=True, ellipse=limbus),
+        calibration=SimpleNamespace(
+            calibrated=False, mm_per_px=0.0,
+            point_px_to_mm=lambda _pt: (0.0, 0.0),
+        ),
+    )
+
+
+def _gui_overlay_suite(display, result):
+    """The overlay set the GUI paints per frame — on a display copy ONLY."""
+    draw_cross_section(display, result, 1.0)  # green/blue crosses + degree labels
+    draw_structure(display, result.limbus.ellipse, (255, 100, 0), thickness=2)
+    draw_structure(display, result.pupil.ellipse, (0, 255, 0), thickness=2)
+    draw_filled_structure(display, result.limbus.ellipse, (255, 100, 0), 0.25)
+    if getattr(result, "iris_detection", None) is not None:
+        draw_iris_feature_overlay(display, result, 1.0)  # magenta iris-feature dots
+    cv2.putText(
+        display, "GUI overlay", (10, 40),
+        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 100, 0), 1, cv2.LINE_AA,
+    )
+
+
+def test_A_detection_result_unchanged_by_overlay_rendering_on_display_copy():
+    """(A) Detect on the pristine frame, then render the full GUI overlay set
+    onto a separate display copy: detection outcome is unaffected."""
+    source = _synthetic_bgr(rng_seed=21)
+    pupil, limbus = _default_geometry()
+    det = IrisFeatureDetector(config=_permissive_config())
+    result = _ns_result(pupil, limbus)
+    _detect_iris(result, source, det, "test-A", None)
+    feats_before = [(f.x, f.y, f.confidence) for f in result.iris_detection.feature_set.features]
+
+    display = source.copy()
+    _gui_overlay_suite(display, result)
+    assert not np.array_equal(display, source)  # overlays landed on the display copy
+
+    res2 = det.detect(source, pupil, limbus)
+    feats_after = [(f.x, f.y, f.confidence) for f in res2.feature_set.features]
+    assert feats_before == feats_after
+
+
+def test_B_display_copy_is_never_the_detector_input():
+    """(B) The production entry receives the pristine source array object; the
+    rendered display buffer is a separate allocation, never handed to detection."""
+    source = _synthetic_bgr(rng_seed=23)
+    pupil, limbus = _default_geometry()
+    rec = _RecordingDetector(IrisFeatureDetector(config=_permissive_config()))
+    result = _ns_result(pupil, limbus)
+    _detect_iris(result, source, rec, "test-B", None)
+
+    assert rec.received is source            # same array object as the source frame
+    assert np.array_equal(rec.received, source)
+
+    display = source.copy()
+    _gui_overlay_suite(display, result)
+    assert not np.shares_memory(display, source)      # display is a fresh allocation
+    assert not np.array_equal(display, rec.received)  # rendered frame ≠ detector input
+
+
+def test_C_and_E_production_pipeline_order_source_detect_then_render():
+    """(C)+(E) Replays the production loop order with the real helpers the GUI
+    calls: source frame → ``process_frame_post_detect(frame=source)`` [which runs
+    iris detection] → GUI rendering on a display copy.  Detection sees the
+    pristine source first; rendering happens after, on a separate buffer."""
+    source = _synthetic_bgr(rng_seed=29)
+    pupil, limbus = _default_geometry()
+    rec = _RecordingDetector(IrisFeatureDetector(config=_permissive_config()))
+    result = _ns_result(pupil, limbus)
+    before = source.copy()
+
+    smoothed = process_frame_post_detect(
+        result=result,
+        frame=source,
+        tracker=None,
+        corneal_calc=None,
+        iris_detector=rec,
+        log_context="test-CE",
+        logger=None,
+    )
+    assert rec.received is source                  # detection ran on the pristine source first
+    assert smoothed.iris_detection is not None and smoothed.iris_detection.valid
+
+    display = source.copy()
+    _gui_overlay_suite(display, smoothed)          # render strictly after detection
+    assert not np.shares_memory(display, source)
+    assert np.array_equal(source, before)          # source frame untouched end to end
+    assert not np.array_equal(display, before)     # overlays exist only on the copy
+
+
+def test_D_drawing_functions_never_mutate_the_source_frame():
+    """(D) The full GUI draw suite, invoked with a display copy, leaves the
+    source frame byte-identical while changing the copy."""
+    source = _synthetic_bgr(rng_seed=31)
+    pupil, limbus = _default_geometry()
+    det = IrisFeatureDetector(config=_permissive_config())
+    result = _ns_result(pupil, limbus)
+    _detect_iris(result, source, det, "test-D", None)
+    before = source.copy()
+
+    display = source.copy()
+    _gui_overlay_suite(display, result)
+    assert np.array_equal(source, before)          # source untouched by rendering
+    assert not np.array_equal(display, before)     # the copy visibly changed
