@@ -77,26 +77,43 @@ _BANNER = "Medevplus IXcentai - Surgical Grade"
 
 # ================================================================
 # Optional fast-pipeline imports (graceful fallback)
+#
+# NOTE: the optimized pipeline pulls in torch (>=18 s import). That is
+# only needed for the `video`/`camera` modes; importing it at module
+# top level delayed CLI startup and the GUI window by ~30 s. The
+# import is now deferred until the optimized pipeline is actually used.
 # ================================================================
 
-try:
-    from pupil_tracking.ml.fast_inference import FastInference
-    from pupil_tracking.video.optimized_processor import (
-        OptimizedVideoProcessor,
-        AsyncCapture,
-        FrameResult,
-        TrackingQuality,
-    )
+_FAST_PIPELINE_AVAILABLE = False
+OptimizedVideoProcessor = None
+AsyncCapture = None
+_FP_LOOKED_UP = False
 
-    _FAST_PIPELINE_AVAILABLE = True
-    FastInferenceEngine = FastInference
-except ImportError:
-    _FAST_PIPELINE_AVAILABLE = False
-    FastInferenceEngine = None
-    OptimizedVideoProcessor = None
-    AsyncCapture = None
-    FrameResult = None
-    TrackingQuality = None
+
+def _ensure_fast_pipeline() -> None:
+    """Lazily import the optimized pipeline; safe to call repeatedly.
+
+    Sets module globals on first call. Populating these names is lazy
+    so that `image` / `gui` mode and classic processing never pay the
+    torch import cost.
+    """
+    global _FAST_PIPELINE_AVAILABLE, OptimizedVideoProcessor, AsyncCapture
+    global _FP_LOOKED_UP
+    if _FP_LOOKED_UP:
+        return
+    _FP_LOOKED_UP = True
+    try:
+        from pupil_tracking.ml.fast_inference import FastInference  # noqa: F401
+        from pupil_tracking.video.optimized_processor import (
+            OptimizedVideoProcessor,
+            AsyncCapture,
+        )
+
+        _FAST_PIPELINE_AVAILABLE = True
+    except ImportError:
+        _FAST_PIPELINE_AVAILABLE = False
+        OptimizedVideoProcessor = None
+        AsyncCapture = None
 
 
 # ==================================================================
@@ -446,31 +463,33 @@ def process_video(
     fast_engine = None
     opt_processor = None
 
-    if use_optimized and _FAST_PIPELINE_AVAILABLE:
-        model_file = _find_model_path(detector, cfg)
-        if model_file:
-            try:
-                opt_processor = OptimizedVideoProcessor(
-                    model_path=model_file,
-                    device="auto",
-                    input_size=resolution,
-                    half_precision=use_fp16,
-                    use_compile=use_compile,
-                    enable_auto_roi=use_roi,
-                    roi_cache_ttl=getattr(args, "roi_cache", 5),
-                    process_noise=getattr(args, "kalman_process_noise", 0.03),
-                    measurement_noise=getattr(args, "kalman_measure_noise", 0.1),
-                    batch_size=_RUNTIME_PROFILE.recommended_batch_size,
-                )
-                print(
-                    f"  Pipeline:     ✓ OPTIMISED "
-                    f"(FP16={use_fp16}, ROI={use_roi}, "
-                    f"batch={opt_processor.get_stats().get('batch_size')})"
-                )
-            except Exception as exc:
-                print(f"  Pipeline:     ! Optimised failed: {exc}")
-                print(f"                  Falling back to classic")
-                opt_processor = None
+    if use_optimized:
+        _ensure_fast_pipeline()
+        if _FAST_PIPELINE_AVAILABLE:
+            model_file = _find_model_path(detector, cfg)
+            if model_file:
+                try:
+                    opt_processor = OptimizedVideoProcessor(
+                        model_path=model_file,
+                        device="auto",
+                        input_size=resolution,
+                        half_precision=use_fp16,
+                        use_compile=use_compile,
+                        enable_auto_roi=use_roi,
+                        roi_cache_ttl=getattr(args, "roi_cache", 5),
+                        process_noise=getattr(args, "kalman_process_noise", 0.03),
+                        measurement_noise=getattr(args, "kalman_measure_noise", 0.1),
+                        batch_size=_RUNTIME_PROFILE.recommended_batch_size,
+                    )
+                    print(
+                        f"  Pipeline:     ✓ OPTIMISED "
+                        f"(FP16={use_fp16}, ROI={use_roi}, "
+                        f"batch={opt_processor.get_stats().get('batch_size')})"
+                    )
+                except Exception as exc:
+                    print(f"  Pipeline:     ! Optimised failed: {exc}")
+                    print(f"                  Falling back to classic")
+                    opt_processor = None
 
     if opt_processor is None:
         print(f"  Pipeline:     Classic (UnifiedDetector)")
@@ -717,41 +736,43 @@ def process_camera(
     opt_processor = None
     async_capture = None
 
-    if use_optimized and _FAST_PIPELINE_AVAILABLE:
-        model_file = _find_model_path(detector, cfg)
-        if model_file:
-            try:
-                opt_processor = OptimizedVideoProcessor(
-                    model_path=model_file,
-                    device="auto",
-                    input_size=resolution,
-                    half_precision=use_fp16,
-                    use_compile=use_compile,
-                    enable_auto_roi=use_roi,
-                    roi_cache_ttl=getattr(args, "roi_cache", 5),
-                    process_noise=getattr(args, "kalman_process_noise", 0.03),
-                    measurement_noise=getattr(args, "kalman_measure_noise", 0.1),
-                    batch_size=_RUNTIME_PROFILE.recommended_batch_size,
-                )
-                async_capture = AsyncCapture(
-                    camera_id,
-                    buffer_size=_RUNTIME_PROFILE.recommended_capture_buffer,
-                )
-                async_capture.start()
-                print(
-                    "  Pipeline: ✓ OPTIMISED "
-                    f"(batch={opt_processor.get_stats().get('batch_size')})\n"
-                )
-            except Exception as exc:
-                print(f"  Pipeline: ! Optimised failed: {exc}")
-                print(f"            Falling back to classic\n")
-                opt_processor = None
-                if async_capture is not None:
-                    try:
-                        async_capture.stop()
-                    except Exception:
-                        pass
-                    async_capture = None
+    if use_optimized:
+        _ensure_fast_pipeline()
+        if _FAST_PIPELINE_AVAILABLE:
+            model_file = _find_model_path(detector, cfg)
+            if model_file:
+                try:
+                    opt_processor = OptimizedVideoProcessor(
+                        model_path=model_file,
+                        device="auto",
+                        input_size=resolution,
+                        half_precision=use_fp16,
+                        use_compile=use_compile,
+                        enable_auto_roi=use_roi,
+                        roi_cache_ttl=getattr(args, "roi_cache", 5),
+                        process_noise=getattr(args, "kalman_process_noise", 0.03),
+                        measurement_noise=getattr(args, "kalman_measure_noise", 0.1),
+                        batch_size=_RUNTIME_PROFILE.recommended_batch_size,
+                    )
+                    async_capture = AsyncCapture(
+                        camera_id,
+                        buffer_size=_RUNTIME_PROFILE.recommended_capture_buffer,
+                    )
+                    async_capture.start()
+                    print(
+                        "  Pipeline: ✓ OPTIMISED "
+                        f"(batch={opt_processor.get_stats().get('batch_size')})\n"
+                    )
+                except Exception as exc:
+                    print(f"  Pipeline: ! Optimised failed: {exc}")
+                    print(f"            Falling back to classic\n")
+                    opt_processor = None
+                    if async_capture is not None:
+                        try:
+                            async_capture.stop()
+                        except Exception:
+                            pass
+                        async_capture = None
 
     # -- classic fallback ----------------------------------------
     cap = None
@@ -1719,16 +1740,16 @@ def _build_parser() -> argparse.ArgumentParser:
     cal_group.add_argument(
         "--calibration-mode",
         type=str,
-        default="ANATOMICAL_ANCHOR",
+        default="FIXED_PIXEL_SCALE",
         choices=["ANATOMICAL_ANCHOR", "FIXED_PIXEL_SCALE", "RING_REFLECTION"],
-        help="Calibration mode: ANATOMICAL_ANCHOR, FIXED_PIXEL_SCALE, RING_REFLECTION (default: ANATOMICAL_ANCHOR)",
+        help="Calibration mode: ANATOMICAL_ANCHOR, FIXED_PIXEL_SCALE, RING_REFLECTION (default: FIXED_PIXEL_SCALE)",
     )
     cal_group.add_argument(
         "--px-per-mm",
         type=float,
-        default=44.5,
+        default=58.2,
         metavar="F",
-        help="Fixed manual scale in px/mm for FIXED_PIXEL_SCALE mode (default: 44.5)",
+        help="Fixed manual scale in px/mm for FIXED_PIXEL_SCALE mode (default: 58.2)",
     )
     cal_group.add_argument(
         "--corneal-diameter-mm",
@@ -1778,6 +1799,7 @@ def _run_startup_self_check(args: argparse.Namespace, cfg: Any) -> int:
 
     optimized_requested = bool(getattr(args, "optimized", True))
     if optimized_requested:
+        _ensure_fast_pipeline()
         if not _FAST_PIPELINE_AVAILABLE:
             warnings.append("Optimized pipeline unavailable - classic pipeline will be used.")
         else:
