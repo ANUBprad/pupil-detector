@@ -32,6 +32,8 @@ from pupil_tracking.iris.correspondence import (
     estimate_correspondence,
 )
 from pupil_tracking.iris.detect import IrisFeatureDetector
+from pupil_tracking.iris.masking import IrisMasking
+from pupil_tracking.iris.roi import sample_annulus_mask
 from pupil_tracking.iris.types import IrisStatus
 from pupil_tracking.utils.types import EllipseParams
 from pupil_tracking.interface.gui.drawing import (
@@ -484,3 +486,56 @@ def test_D_drawing_functions_never_mutate_the_source_frame():
     _gui_overlay_suite(display, result)
     assert np.array_equal(source, before)          # source untouched by rendering
     assert not np.array_equal(display, before)     # the copy visibly changed
+
+
+# ── eyelid-mask precision (recall root cause) ─────────────────────────
+
+def _paint_lid(gray, band_y):
+    """Smooth dark band across the top of the iris (an eyelid) + lash spikes."""
+    painted = gray.astype(np.int16).copy()
+    rng = np.random.default_rng(42)
+    painted[:band_y, :] = 45 + rng.integers(-3, 3, (band_y, gray.shape[1]))
+    rng = np.random.default_rng(43)
+    for _ in range(24):
+        lx = rng.integers(gray.shape[1] // 2 - 80, gray.shape[1] // 2 + 80)
+        ml = 8 + int(rng.integers(0, 14))
+        painted[band_y:band_y + ml, lx] = 14
+    return np.clip(painted, 0, 255).astype(np.uint8)
+
+
+def test_eyelid_mask_ignores_iris_furrow_speckle():
+    """A clean open iris must not be swept as 'eyelid': the eyelid mask on a
+    furrow/crypt-textured synthetic eye with no lid stays a small fraction of
+    the annulus (speckle is not a coherent eyelid line)."""
+    bgr = _synthetic_bgr(rng_seed=7, texture=14.0)
+    pupil, limbus = _default_geometry()
+    roi = IrisFeatureDetector().roi_extractor.build(pupil, limbus)
+    gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
+    annulus = sample_annulus_mask(gray.shape[:2], roi)
+    mask = IrisMasking()._eyelid_mask(gray, annulus)
+    frac = np.count_nonzero(mask) / max(np.count_nonzero(annulus), 1)
+    assert frac < 0.05
+
+
+def test_eyelid_mask_still_catches_real_lid_band():
+    """A genuine lid crossing the iris (long horizontal band boundary) stays
+    masked: the mask fires on it, and no accepted feature centre lands on the
+    occluded lid skin."""
+    bgr = _synthetic_bgr(rng_seed=5, texture=10.0)
+    pupil, limbus = _default_geometry()
+    roi = IrisFeatureDetector().roi_extractor.build(pupil, limbus)
+    gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
+    band_y = gray.shape[0] // 2 - 40
+    painted = _paint_lid(gray, band_y)
+
+    annulus = sample_annulus_mask(painted.shape, roi)
+    mask = IrisMasking()._eyelid_mask(painted, annulus)
+
+    n_band = int(np.count_nonzero(mask[:band_y]))
+    assert n_band > 0  # the lid line itself is caught
+
+    res = detect_iris_features(painted, pupil, limbus)
+    for f in res.feature_set.features:
+        yi = int(round(f.y))
+        xi = int(round(f.x))
+        assert not mask[yi, xi]  # no feature centre on occluded lid skin
