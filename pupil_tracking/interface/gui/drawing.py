@@ -6,7 +6,9 @@ site or in ``gui_helpers``.
 """
 from __future__ import annotations
 
+import logging
 import math
+import time
 from typing import Any, Tuple
 
 import cv2
@@ -16,6 +18,12 @@ from types import SimpleNamespace
 from pupil_tracking.interface.gui_helpers import scale_ellipse, draw_structure
 
 _CIRCLE_DRAW_THRESHOLD: float = 0.95
+
+# Iris-feature overlay (additive, purely visual — never affects detection).
+_IRIS_FEATURE_COLOR: Tuple[int, int, int] = (255, 80, 255)
+_IRIS_LOG = logging.getLogger("iris.overlay")
+_IRIS_LOG_INTERVAL_S = 2.0
+_IRIS_LAST_LOG = [0.0]
 
 
 # ── Pure geometry helpers ────────────────────────────────────────────
@@ -127,6 +135,63 @@ def draw_cross_section(out: np.ndarray, result: Any, scale: float) -> None:
     cv2.putText(out, "0", (lx - int(15 * scale), ly + int(4 * scale)), font, fsz, lbl, 1, cv2.LINE_AA)
     rx, ry = _pt(l_rt)
     cv2.putText(out, "180", (rx + int(5 * scale), ry + int(4 * scale)), font, fsz, lbl, 1, cv2.LINE_AA)
+
+
+# ── Iris-feature overlay (purely visual, additive) ────────────────────
+
+
+def _log_iris_rendered(detected: int, sent: int, rendered: int) -> None:
+    """Rate-limited runtime diagnostic for the iris-feature render path."""
+    now = time.monotonic()
+    if now - _IRIS_LAST_LOG[0] < _IRIS_LOG_INTERVAL_S:
+        return
+    _IRIS_LAST_LOG[0] = now
+    _IRIS_LOG.info(
+        "iris overlay: detected=%d accepted=%d rendered=%d",
+        detected,
+        sent,
+        rendered,
+    )
+
+
+def draw_iris_feature_overlay(
+    out: np.ndarray, result: Any, scale: float, label_y: int = 30
+) -> None:
+    """Draw accepted iris features at their source-image positions.
+
+    Pure rendering of an existing ~detection result; never mutates it.  Called
+    by the scaled live overlay and the full-resolution snapshot/export overlay.
+    """
+    iris_det = getattr(result, "iris_detection", None)
+    if iris_det is None or not getattr(iris_det, "valid", False):
+        return
+    fs = getattr(iris_det, "feature_set", None)
+    if fs is None:
+        return
+    feats = [f for f in fs.features if getattr(f, "valid", True)]
+    if not feats:
+        return
+
+    r = max(2, int(round(3.0 * scale)))
+    for f in feats:
+        pt = (int(round(f.x * scale)), int(round(f.y * scale)))
+        cv2.circle(out, pt, r, _IRIS_FEATURE_COLOR, -1, cv2.LINE_AA)
+
+    cv2.putText(
+        out,
+        f"Iris: {len(feats)} features",
+        (10, label_y),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        max(0.35, 0.45 * scale),
+        _IRIS_FEATURE_COLOR,
+        1,
+        cv2.LINE_AA,
+    )
+    _log_iris_rendered(
+        getattr(fs, "num_candidates", len(feats)),
+        len(fs.features),
+        len(feats),
+    )
 
 
 # ── State-dependent overlays (gui = PupilTrackingGUI instance) ──────
@@ -267,6 +332,8 @@ def draw_overlay_scaled(gui: Any, out: np.ndarray, result: Any, scale: float) ->
         cv2.putText(out, alert[:80], (10, h - 15 - i * 20), cv2.FONT_HERSHEY_SIMPLEX, font_scale_a, (0, 100, 255), 1)
 
     draw_ruler_overlay(gui, out, scale)
+
+    draw_iris_feature_overlay(out, result, scale, label_y=30)
 
 
 def draw_debug_overlay(gui: Any, out: np.ndarray, scale: float) -> None:
@@ -529,5 +596,7 @@ def draw_overlay(gui: Any, image: np.ndarray, result: Any) -> np.ndarray:
 
     for i, alert in enumerate(result.alerts[:3]):
         cv2.putText(out, alert[:80], (10, h - 15 - i * 20), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 100, 255), 1)
+
+    draw_iris_feature_overlay(out, result, 1.0, label_y=55)
 
     return out
