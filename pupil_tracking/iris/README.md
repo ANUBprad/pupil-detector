@@ -10,6 +10,13 @@ you opt in by calling its public API explicitly.
 > estimation, or astigmatism-axis correction. Those are later phases and depend
 > on this detector producing a stable, normalised feature set.
 
+> **Experimental additive module.** `polar.py` implements geometry-aware polar
+> (rubber-sheet) unwrap and phase/circular angular registration as independent,
+> gated evidence. It is **disabled by default**
+> (`PolarRegistrationConfig.enabled = False`), is not part of the detection
+> path, and is *not* a clinical cyclotorsion source. See
+> `_phase_artifacts/PHASE_16B_POLAR_REGISTRATION.md`.
+
 > **No clinical accuracy claims.** The thresholds (e.g. `min_contrast`) are
 > conservative placeholders to be validated against real ELITA paired data when
 > it becomes available. The available surgical clinical imagery is used only as
