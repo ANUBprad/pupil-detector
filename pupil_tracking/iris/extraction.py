@@ -270,6 +270,60 @@ class IrisFeatureExtractor:
         """
         return self._local_visibility(usable_mask, x, y)
 
+    def _annulus_support_fraction(
+        self,
+        usable_mask: np.ndarray,
+        x: float,
+        y: float,
+        roi: IrisROI,
+        pupil: Optional[EllipseParams],
+        limbus: Optional[EllipseParams],
+    ) -> float:
+        """Fraction of the feature's patch pixels inside the iris annulus.
+
+        The annulus is defined by the authoritative pupil/limbus ellipses (each
+        in its own centre/frame, with the ROI inset fractions applied), not by
+        a ray-from-centre approximation.  A pixel counts when it is strictly
+        outside the scaled pupil ellipse and strictly inside the scaled limbus
+        ellipse.  When geometry is unavailable the whole patch is deemed
+        inside (callers that pass no geometry simply keep mask-only gating).
+        """
+        if pupil is None or limbus is None:
+            return 1.0
+        p_smaj = float(roi.pupil_semi_major) or float(pupil.semi_major)
+        p_smin = float(roi.pupil_semi_minor) or float(pupil.semi_minor)
+        p_ang = float(roi.pupil_angle_deg) if roi.valid else float(pupil.angle_deg)
+        p_cx = float(pupil.center_x)
+        p_cy = float(pupil.center_y)
+        l_smaj = float(roi.limbus_semi_major) or float(limbus.semi_major)
+        l_smin = float(roi.limbus_semi_minor) or float(limbus.semi_minor)
+        l_ang = float(roi.limbus_angle_deg) if roi.valid else float(limbus.angle_deg)
+        l_cx = float(limbus.center_x)
+        l_cy = float(limbus.center_y)
+        pup_scale = 1.0 + float(roi.inner_inset_frac)
+        lim_scale = 1.0 - float(roi.outer_inset_frac)
+
+        h, w = usable_mask.shape[:2]
+        x0 = int(round(x))
+        y0 = int(round(y))
+        r = int(self.radius_px)
+        ys = max(0, y0 - r)
+        ye = min(h, y0 + r + 1)
+        xs = max(0, x0 - r)
+        xe = min(w, x0 + r + 1)
+        if ys >= ye or xs >= xe:
+            return 1.0
+        yy, xx = np.mgrid[ys:ye, xs:xe]
+        px = xx.astype(np.float64) + 0.5
+        py = yy.astype(np.float64) + 0.5
+        outside_pupil = _ellipse_quad_for_point(
+            p_cx, p_cy, p_smaj * pup_scale, p_smin * pup_scale, p_ang, px, py
+        ) >= 1.0
+        inside_limbus = _ellipse_quad_for_point(
+            l_cx, l_cy, l_smaj * lim_scale, l_smin * lim_scale, l_ang, px, py
+        ) <= 1.0
+        return float(np.count_nonzero(outside_pupil & inside_limbus) / px.size)
+
     def _intensity_range_ok(
         self,
         patch_mean: float,
@@ -365,6 +419,15 @@ class IrisFeatureExtractor:
                 if pvf < self.min_patch_valid_fraction:
                     rejection_reasons["patch_outside_iris"] += 1
                     continue
+                ann_frac = self._annulus_support_fraction(
+                    usable_mask, x, y, roi, pupil, limbus
+                )
+                if pupil is not None and limbus is not None and ann_frac <= 0.0:
+                    rejection_reasons["outside_iris_annulus"] += 1
+                    continue
+                if pvf * ann_frac < self.min_patch_valid_fraction:
+                    rejection_reasons["patch_outside_annulus"] += 1
+                    continue
 
                 descriptor = self._descriptor(gray, x, y)
                 clearance = min(radial_norm, 1.0 - radial_norm) * 2.0
@@ -448,6 +511,33 @@ class IrisFeatureExtractor:
     def _angular_gap(a: float, b: float) -> float:
         gap = abs(a - b) % 360.0
         return min(gap, 360.0 - gap)
+
+
+def _ellipse_quad_for_point(
+    cx: float,
+    cy: float,
+    semi_major: float,
+    semi_minor: float,
+    angle_deg: float,
+    px: float,
+    py: float,
+) -> float:
+    """Ellipse quadratic-form value at a pixel: ``< 1`` inside, ``> 1`` outside.
+
+    Evaluated in the ellipse's own (rotated) frame using its own centre, so it
+    is exact for eccentric / rotated pupil and limbus geometry rather than a
+    ray-from-ROI-centre approximation.
+    """
+    if semi_major <= 0 or semi_minor <= 0:
+        return 0.0
+    dx = px - cx
+    dy = py - cy
+    phi = math.radians(angle_deg)
+    cos_phi = math.cos(phi)
+    sin_phi = math.sin(phi)
+    xr = dx * cos_phi + dy * sin_phi
+    yr = -dx * sin_phi + dy * cos_phi
+    return (xr / semi_major) ** 2 + (yr / semi_minor) ** 2
 
 
 def radius_px_to_scale(radius_px: int, outer_radius: float) -> float:
